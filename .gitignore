@@ -13,6 +13,11 @@ venv/
 *.bak
 *.bak.*
 chroma_db.bak*
+
+# 历史遗留的重复向量库：真正的库只有根目录 chroma_db/（main.py 的 PERSIST_DIR）
+# data/ 下只保留 knowledge_base/，其余一旦再生成不要入库
+data/chroma_db/
+data/vector_store/
 assets_src/
 tools/*.json
 backend/*.log
