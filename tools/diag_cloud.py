@@ -27,7 +27,7 @@ FACT_Q = "C1 能开什么车"
 # 必须选跨主题复合问句：单点问题会被确定性事实层 0.x 秒接走，测不到 RAG 生成链路。
 RAG_Q = "驾驶证丢了同时车辆年检也过期了，分别要怎么办，会不会被处罚"
 
-PASS, FAIL, WARN = "[PASS]", "[FAIL]", "[WARN]"
+PASS, FAIL, WARN, SKIP = "[PASS]", "[FAIL]", "[WARN]", "[SKIP]"
 
 
 def req(base, path, body=None, timeout=40):
@@ -95,10 +95,16 @@ def main():
         problems.append("status 不可达")
     else:
         n = s.get("document_count", 0)
-        if n == 735:
+        engine_ok = bool(h and h.get("engine"))
+        if not engine_ok:
+            # engine=false 时接口直接短路返回 0，这个 0 与"镜像里有没有库"无关，
+            # 报成"库没打进镜像"会把排查方向带偏到 .dockerignore 上（那里通常没问题）。
+            print(f"  {SKIP} document_count={n} —— 引擎未初始化时此值恒为 0，不代表镜像缺库")
+            print("        → 先解决上一步的引擎问题，重启后再看这一项")
+        elif n == 735:
             print(f"  {PASS} document_count={n}（与本地库一致）")
         elif n == 0:
-            print(f"  {FAIL} document_count=0，镜像里没读到 chroma_db")
+            print(f"  {FAIL} document_count=0，引擎已就绪但读不到向量库")
             print("         → 确认 .dockerignore 没排除 chroma_db、构建拉的是最新 main")
             problems.append("向量库为空")
         else:
@@ -107,9 +113,13 @@ def main():
     # ---------- 3. /api/query ----------
     print("\n[3/3] POST /api/query")
     d, el, err = req(base, "/api/query", {"question": FACT_Q, "format": "blocks"})
+    engine_ok = bool(h and h.get("engine"))
     if err:
-        print(f"  {FAIL} 事实层题失败：{err}")
-        problems.append("query 不可达")
+        if not engine_ok:
+            print(f"  {SKIP} 引擎未初始化，400 属预期结果，不重复计入问题")
+        else:
+            print(f"  {FAIL} 事实层题失败：{err}")
+            problems.append("query 不可达")
     else:
         ok = d.get("success") and d.get("blocks")
         tag = PASS if ok else FAIL
@@ -121,7 +131,9 @@ def main():
             problems.append("query 返回空")
             print("         →", json.dumps(d, ensure_ascii=False)[:300])
 
-    if full:
+    if full and not engine_ok:
+        print(f"\n[+] RAG 端到端 —— {SKIP} 引擎未初始化，跳过（不重复报同一根因）")
+    elif full:
         print(f"\n[+] RAG 端到端（复合长问句，最坏情况）")
         d2, el2, err2 = req(base, "/api/query", {"question": RAG_Q, "format": "blocks"}, timeout=45)
         if err2:
@@ -146,6 +158,11 @@ def main():
 
     # ---------- 汇总 ----------
     print("\n" + "=" * 68)
+    if not engine_ok:
+        print("结论：根因只有一个 —— 环境变量未注入到容器（API_KEY 为空）。")
+        print("      其余几项都是它的连带结果，不要逐条去查。")
+        print("      处置：确认「服务设置 → 环境变量」里 8 条都在 → 点一次「重启」→ 重跑本脚本。")
+        sys.exit(1)
     if problems:
         print(f"结论：{len(problems)} 项待处理 → {'、'.join(problems)}")
         sys.exit(1)
