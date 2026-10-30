@@ -646,9 +646,19 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
         return answer
 
 
-def create_rag_engine(persist_dir: str, api_base: str, api_key: str, model: str, embed_backend: str = "local"):
-    """创建 RAGEngine 实例辅助函数。"""
-    vector_store = VectorStore(persist_dir, api_key=api_key, api_base=api_base, embed_backend=embed_backend)
+def create_rag_engine(persist_dir: str, api_base: str, api_key: str, model: str, embed_backend: str = "cloud",
+                      embed_api_key: str = "", embed_api_base: str = ""):
+    """创建 RAGEngine 实例辅助函数。
+
+    生成与嵌入是两套独立凭据：生成走智谱 glm-4-flash（免费），嵌入走云端嵌入服务。
+    所以这里分开传 embed_api_key / embed_api_base，未提供时才回落到生成侧配置。
+    """
+    vector_store = VectorStore(
+        persist_dir,
+        api_key=embed_api_key or api_key,
+        api_base=embed_api_base or api_base,
+        embed_backend=embed_backend,
+    )
     print(f"[create_rag_engine] 向量库加载完成，文档数: {vector_store.count()}")
 
     # ── 启动预热 ──

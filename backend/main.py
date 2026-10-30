@@ -20,11 +20,38 @@ import re
 
 from rag_engine import RAGEngine, create_rag_engine
 
+
+# ============ .env 加载（零依赖，密钥不进代码不进仓库） ============
+def _load_dotenv(path: str) -> None:
+    """把项目根目录的 .env 读进环境变量（已存在的真实环境变量优先）。
+
+    为什么不引 python-dotenv：云托管里密钥来自控制台环境变量，本地才需要 .env，
+    为这一个场景多一个依赖不值得。格式只支持 KEY=VALUE / # 注释，够用。
+    """
+    if not os.path.isfile(path):
+        return
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                k = k.strip()
+                v = v.strip().strip('"').strip("'")
+                if k and v:
+                    os.environ.setdefault(k, v)
+        print(f"[config] 已加载 {path}")
+    except Exception as e:
+        print(f"[config] .env 读取失败（忽略）: {e}")
+
+
+_load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+
 # ============ 配置 ============
 # 生成模型后端（GEN_BACKEND）：zhipu（默认·永久免费，无需充值）| siliconflow
 #   - 智谱 GLM-4-Flash：open.bigmodel.cn 注册免费 Key（送 2000 万 token），中文强、响应快
 #   - 硅基流动：原方案，需充值（余额 0 时连免费模型也被 402 拦截）
-# 嵌入模型：本地 BAAI/bge-m3（sentence-transformers，零 API，复用既有 chroma_db）
 GEN_BACKEND = os.getenv("GEN_BACKEND", "zhipu")
 if GEN_BACKEND == "siliconflow":
     API_BASE = os.getenv("API_BASE", "https://api.siliconflow.cn/v1")
@@ -32,9 +59,19 @@ if GEN_BACKEND == "siliconflow":
 else:  # zhipu 默认
     API_BASE = os.getenv("API_BASE", "https://open.bigmodel.cn/api/paas/v4")
     MODEL = os.getenv("MODEL", "glm-4-flash")
-# API_KEY：智谱 / 硅基流动 Key，从环境变量或 .env 提供（不建议硬编码）
+# API_KEY：生成侧 Key（智谱），从环境变量或 .env 提供（不硬编码）
 API_KEY = os.getenv("API_KEY", "")
-EMBED_BACKEND = os.getenv("EMBED_BACKEND", "local")  # local（默认·本地中文模型·零API）| zhipu（付费）| siliconflow（需余额）
+
+# ── 嵌入（检索侧）：默认走云端，让 0.5 核 1G 规格也能跑 ──
+# cloud/siliconflow = 硅基流动 BAAI/bge-m3（1024 维，免费，国内直连）
+# zhipu = 智谱 embedding-3（1024 维，需资源包）；local = 本地 sentence-transformers（需 torch，约 1.5G 镜像）
+EMBED_BACKEND = os.getenv("EMBED_BACKEND", "cloud")
+EMBED_API_BASE = os.getenv("EMBED_API_BASE", "https://api.siliconflow.cn/v1")
+EMBED_MODEL = os.getenv("EMBED_MODEL", "BAAI/bge-m3")
+# 嵌入 Key 单独配置：生成用智谱、嵌入用硅基流动是常态，混用一个变量迟早出事
+EMBED_API_KEY = os.getenv("EMBED_API_KEY", "") or API_KEY
+# 查询期嵌入超时：必须远小于 15s 前端硬上限，且超时后靠 BM25 兜住
+EMBED_TIMEOUT = float(os.getenv("EMBED_TIMEOUT", "8"))
 
 # 向量库路径
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -63,12 +100,16 @@ app.add_middleware(
 
 # 全局存储 RAG 引擎
 rag_engine: Optional[RAGEngine] = None
+# 初始化失败原因：云托管上"服务活着但答不了"最常见的原因就是嵌入 Key 缺失/维度不匹配，
+# 把原因留在 /health 里，排查不用翻日志
+init_error: str = ""
 
 
 def init_engine():
     """初始化 RAG 引擎（在服务启动时调用）"""
-    global rag_engine
+    global rag_engine, init_error
     if not API_KEY or API_KEY == "your-api-key-here":
+        init_error = "缺少生成侧 API_KEY"
         print("=" * 60)
         print("警告: 未设置 API_KEY，请在环境变量中设置或修改 main.py")
         print("启动后你需要配置 API 才能使用问答功能")
@@ -76,10 +117,18 @@ def init_engine():
         return False
 
     try:
-        rag_engine = create_rag_engine(PERSIST_DIR, API_BASE, API_KEY, MODEL, embed_backend=EMBED_BACKEND)
-        print(f"[init] RAG 引擎初始化成功")
+        rag_engine = create_rag_engine(
+            PERSIST_DIR, API_BASE, API_KEY, MODEL,
+            embed_backend=EMBED_BACKEND,
+            embed_api_key=EMBED_API_KEY,
+            embed_api_base=EMBED_API_BASE,
+        )
+        print(f"[init] RAG 引擎初始化成功（嵌入={EMBED_BACKEND}，"
+              f"维度={getattr(getattr(rag_engine, 'vector_store', None), 'stored_dim', None)}）")
+        init_error = ""
         return True
     except Exception as e:
+        init_error = f"{type(e).__name__}: {e}"
         print(f"[init] RAG 引擎初始化失败: {e}")
         return False
 
@@ -293,8 +342,35 @@ def query(request: QueryRequest, http_request: Request):
 
 @app.get("/health")
 def health():
-    """给云托管健康检查用：只回进程活跃，不查知识库（避免探针把冷启动拖长）。"""
-    return {"status": "ok", "engine": bool(rag_engine)}
+    """给云托管健康检查用：只回进程活跃，不查知识库（避免探针把冷启动拖长）。
+
+    embed_vector 反映向量通道是否处于降级状态（云端嵌入不可用时为 false），
+    排查时不用翻日志就能判断"答得差"是不是嵌入挂了导致的。
+    """
+    vec_ok = True
+    model_name = EMBED_MODEL
+    dim = None
+    if rag_engine is not None:
+        vs = getattr(rag_engine, "vector_store", None)
+        try:
+            vec_ok = not getattr(vs, "vector_degraded", False)
+            fn = getattr(vs, "embedding_fn", None)
+            # 实际生效的模型名以嵌入函数为准：local 后端用的是本地模型名，
+            # 直接回显 EMBED_MODEL 会显示成云端模型名（bge-m3），排查时被误导
+            model_name = (getattr(fn, "model_name", None) or getattr(fn, "model", None)
+                          or getattr(fn, "name", None) or EMBED_MODEL)
+            dim = getattr(vs, "stored_dim", None)
+        except Exception:
+            vec_ok, model_name, dim = True, EMBED_MODEL, None
+    return {
+        "status": "ok",
+        "engine": bool(rag_engine),
+        "engine_error": init_error if not rag_engine else "",
+        "embed_backend": EMBED_BACKEND,
+        "embed_model": model_name,
+        "embed_dim": dim,
+        "embed_vector": vec_ok,
+    }
 
 
 @app.get("/api/status")

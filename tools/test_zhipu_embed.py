@@ -9,12 +9,12 @@ import urllib.error
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
-BAT = r"C:\RAG\start_backend.bat"
+ENV = r"C:\RAG\rag-vehicle-system\.env"
 key = None
-for line in open(BAT, "r", encoding="utf-8", errors="ignore"):
-    m = re.match(r"\s*set\s+API_KEY=(.+)", line.strip(), re.I)
-    if m:
-        key = m.group(1).strip()
+for line in open(ENV, "r", encoding="utf-8", errors="ignore"):
+    line = line.strip()
+    if line.startswith("API_KEY=") and not line.startswith("#"):
+        key = line.split("=", 1)[1].strip().strip('"').strip("'")
         break
 if not key:
     print("NO_KEY")

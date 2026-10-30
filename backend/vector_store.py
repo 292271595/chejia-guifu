@@ -11,6 +11,7 @@ os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 import re
+import time
 import chromadb
 from chromadb.config import Settings
 from typing import List, Dict
@@ -18,25 +19,51 @@ from chromadb import EmbeddingFunction, Documents, Embeddings
 from openai import OpenAI
 
 
-class SiliconFlowEmbeddingFunction(EmbeddingFunction):
-    """使用硅基流动 SiliconFlow API 调用 BAAI/bge-m3，免费云端推理，无需下载模型"""
-    BATCH_SIZE = 32  # 每批最多 32 条，避免 API 超时
+class CloudEmbeddingFunction(EmbeddingFunction):
+    """云端嵌入（OpenAI 兼容接口）—— 硅基流动 BAAI/bge-m3（免费、1024 维、国内直连）。
 
-    def __init__(self, api_key: str, api_base: str = "https://api.siliconflow.cn/v1", model: str = "BAAI/bge-m3"):
-        self.client = OpenAI(base_url=api_base, api_key=api_key)
+    为什么把嵌入搬到云端（而不是继续用本地 sentence-transformers）：
+      · 云托管 0.5 核 1G 跑不动 torch：镜像 1.5GB、常驻内存 500MB+、冷启动 20s+；
+      · 云端嵌入把「模型常驻内存」换成「一次 HTTP 往返」（实测 150~400ms），规格可降到 1G 以内。
+
+    风险与对策（这是放弃本地模型必须付的账）：
+      · 网络抖动 / 额度用尽 → 检索会整体失效。对策：VectorStore.search 内置纯 BM25 降级，
+        嵌入不可用时检索仍可用，只是语义召回变弱，绝不返回 500；
+      · 查询期超时必须短且**禁用 SDK 自动重试**：openai SDK 的 max_retries 会把一次 8s
+        超时变成 3 次重试共 24s，直接吃光 15s 预算。
+    """
+    BATCH_SIZE = 32  # 每批最多 32 条，避免单次请求过大被拒
+
+    def __init__(self, api_key: str, api_base: str = "https://api.siliconflow.cn/v1",
+                 model: str = "BAAI/bge-m3", dimension: int = 1024, timeout: float = 8.0):
+        if not api_key:
+            raise ValueError("云端嵌入需要 API Key（EMBED_API_KEY 或 API_KEY）")
+        # max_retries=0：重试必须由调用方决定，SDK 静默重试会放大延迟
+        self.client = OpenAI(base_url=api_base, api_key=api_key,
+                             timeout=timeout, max_retries=0)
         self.model = model
-        print(f"[SiliconFlowEmbedding] Using {model} via {api_base}")
+        self.dimension = dimension
+        self.api_base = api_base
+        print(f"[CloudEmbedding] {model} (dim={dimension}, timeout={timeout}s) via {api_base}")
 
     def __call__(self, texts: Documents) -> Embeddings:
+        texts = list(texts)
+        if not texts:
+            return []
         all_embeddings = []
         for i in range(0, len(texts), self.BATCH_SIZE):
             batch = texts[i:i + self.BATCH_SIZE]
+            # 空串会被部分服务端直接 400，替换成一个空格（语义上等价于无内容）
+            batch = [t if (t and t.strip()) else " " for t in batch]
             resp = self.client.embeddings.create(model=self.model, input=batch)
-            batch_embs = [d.embedding for d in sorted(resp.data, key=lambda x: x.index)]
-            all_embeddings.extend(batch_embs)
+            all_embeddings.extend(d.embedding for d in sorted(resp.data, key=lambda x: x.index))
             if len(texts) > self.BATCH_SIZE:
                 print(f"  [Embedding] batch {i // self.BATCH_SIZE + 1}: {len(batch)} texts")
         return all_embeddings
+
+
+# 向后兼容：旧代码/配置里写的 siliconflow 后端名仍指向同一实现
+SiliconFlowEmbeddingFunction = CloudEmbeddingFunction
 
 
 class ZhipuEmbeddingFunction(EmbeddingFunction):
@@ -52,6 +79,7 @@ class ZhipuEmbeddingFunction(EmbeddingFunction):
         self.client = OpenAI(base_url=api_base, api_key=api_key, timeout=120.0, max_retries=2)
         self.model = model
         self.dimensions = dimensions
+        self.dimension = dimensions  # 统一属性名，供 VectorStore 做维度校验
         print(f"[ZhipuEmbedding] Using {model} (dim={dimensions}) via {api_base}")
 
     def __call__(self, texts: Documents) -> Embeddings:
@@ -81,13 +109,14 @@ class LocalSTEmbeddingFunction(EmbeddingFunction):
         # 离线模式：模型权重已缓存到本地，禁止联网校验（避免代理/断网导致 502 启动失败）
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
         os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
-        self.model_name = model_name or os.getenv("EMBED_MODEL", "BAAI/bge-small-zh-v1.5")
+        self.model_name = model_name or os.getenv("LOCAL_EMBED_MODEL", "BAAI/bge-small-zh-v1.5")
         print(f"[LocalEmbed] 正在加载本地模型 {self.model_name} ...")
         self.model = SentenceTransformer(self._resolve_local_path(self.model_name))
         try:
             dim = self.model.get_embedding_dimension()
         except AttributeError:
             dim = self.model.get_sentence_embedding_dimension()
+        self.dimension = dim  # 统一属性名，供 VectorStore 做维度校验
         print(f"[LocalEmbed] 加载完成，维度={dim}")
 
     @staticmethod
@@ -123,6 +152,7 @@ class LocalBGEM3EmbeddingFunction(EmbeddingFunction):
             raise ImportError("本地嵌入需要依赖，请先运行：pip install sentence-transformers torch")
         print(f"[LocalBGE] 正在加载本地模型 {model_name}（首次会从 HuggingFace 下载约 2.3GB）...")
         self.model = SentenceTransformer(model_name)
+        self.dimension = 1024  # bge-m3 固定 1024 维
         print("[LocalBGE] 本地模型加载完成")
 
     def __call__(self, texts: Documents) -> Embeddings:
@@ -217,42 +247,158 @@ def expand_query(query: str) -> str:
     return f"{query} {tail}"
 
 
+# ============================================================
+# 嵌入后端统一入口
+# ============================================================
+def create_embedding_function(backend: str = "cloud", api_key: str = "", api_base: str = "",
+                              model: str = "", timeout: float = 8.0) -> EmbeddingFunction:
+    """唯一的嵌入后端工厂。
+
+    为什么必须收口成一个函数：换嵌入模型最容易出的事故是「建库用一个、查询用另一个」
+    （build_kb.py 与 main.py 各写一套判断、维度写死两处），结果库里 1024 维、查询 512 维，
+    chroma 要么抛看不懂的维度错误，要么静默返回垃圾结果。后端选择只在这里做一次。
+
+    可选值：cloud / siliconflow（硅基流动 bge-m3，1024 维）、zhipu（embedding-3）、local（本地模型）
+    """
+    backend = (backend or "cloud").strip().lower()
+    if backend in ("cloud", "siliconflow"):
+        return CloudEmbeddingFunction(
+            api_key=api_key,
+            api_base=api_base or os.getenv("EMBED_API_BASE", "https://api.siliconflow.cn/v1"),
+            model=model or os.getenv("EMBED_MODEL", "BAAI/bge-m3"),
+            dimension=int(os.getenv("EMBED_DIM", "1024")),
+            timeout=timeout,
+        )
+    if backend == "zhipu":
+        return ZhipuEmbeddingFunction(
+            api_key=api_key,
+            api_base=api_base or "https://open.bigmodel.cn/api/paas/v4",
+            model=model or os.getenv("EMBED_MODEL", "embedding-3"),
+            dimensions=int(os.getenv("EMBED_DIM", "1024")),
+        )
+    if backend == "local":
+        # 注意：本地模型名走 LOCAL_EMBED_MODEL，**故意不读 EMBED_MODEL**。
+        # EMBED_MODEL 是云端模型名（如 BAAI/bge-m3），混用会让 local 后端去下载
+        # 一个没缓存的模型，启动直接失败——配置隔离比"少一个变量"重要。
+        return LocalSTEmbeddingFunction(
+            model_name=model or os.getenv("LOCAL_EMBED_MODEL") or None)
+    raise ValueError(f"未知的嵌入后端: {backend}（可选 cloud / siliconflow / zhipu / local）")
+
+
+class _NoEmbeddingFunction(EmbeddingFunction):
+    """none 模式的占位嵌入：不产生向量，只用于类型占位，运行期绝不会被调用。
+
+    为什么要保留这个"空嵌入"后端：它让整套代码在**没有任何嵌入服务**时仍能跑通——
+    chroma 退化为纯文档仓库，检索全走 BM25。实测本项目 735 片段库纯 BM25 top-8 命中 94%，
+    混合 100%，差距只在语义改写类问句。把嵌入做成可选增强，就不存在"key 过期 = 服务挂掉"。
+    """
+    dimension = 0
+
+    def __call__(self, input):  # noqa: A002 - 与 EmbeddingFunction 签名一致
+        raise RuntimeError("EMBED_BACKEND=none 不提供嵌入能力")
+
+
 class VectorStore:
     """
     ChromaDB 封装，支持混合检索：
-    1. 向量相似度检索（ChromaDB ONNX 嵌入）
-    2. 中文关键词匹配（bigram 重叠）
-    3. 合并结果：向量检索候选 + 关键词检索候选，按混合分排序
+    1. 向量相似度检索（云端或本地嵌入）
+    2. 中文关键词匹配（BM25 + bigram）
+    3. 合并结果：向量分 0.55 + 关键词分 0.45
+
+    可用性设计（重要）：向量通道是**可失败**的。嵌入服务抖动、额度用尽、网络不通时，
+    search() 自动退化为纯 BM25，而不是把异常抛给上层变成 500/超时。
+    法规问答里 BM25 本身召回不弱（条文术语高度集中），退化的代价是语义召回变弱，不是不可用。
     """
 
-    def __init__(self, persist_dir: str, api_key: str = None, api_base: str = "https://api.siliconflow.cn/v1", collection_name: str = "vehicle_knowledge", embed_backend: str = "local"):
+    def __init__(self, persist_dir: str, api_key: str = None,
+                 api_base: str = "https://api.siliconflow.cn/v1",
+                 collection_name: str = "vehicle_knowledge", embed_backend: str = "cloud",
+                 embed_timeout: float = 8.0, verify_dim: bool = True):
         self.persist_dir = persist_dir
         self.collection_name = collection_name
-
-        if embed_backend == "local":
-            print("[VectorStore] 使用本地中文嵌入模型（零 API、零充值）")
-            self.embedding_fn = LocalSTEmbeddingFunction()
-        elif embed_backend == "zhipu":
-            print("[VectorStore] 使用智谱 embedding-3 嵌入（注意：该模型属付费资源包）")
-            self.embedding_fn = ZhipuEmbeddingFunction(api_key=api_key or "", api_base=api_base)
+        self.no_vector = (embed_backend or "").strip().lower() == "none"
+        print(f"[VectorStore] 嵌入后端: {embed_backend}"
+              + ("（纯 BM25 模式，不产生/不使用向量）" if self.no_vector else ""))
+        if self.no_vector:
+            self.embedding_fn = _NoEmbeddingFunction()
         else:
-            if not api_key:
-                raise ValueError("api_key is required for SiliconFlow embedding API")
-            print("[VectorStore] 正在初始化硅基流动 BGE-m3 嵌入 API...")
-            self.embedding_fn = SiliconFlowEmbeddingFunction(api_key=api_key, api_base=api_base)
-            print("[VectorStore] 嵌入 API 就绪")
+            self.embedding_fn = create_embedding_function(
+                backend=embed_backend, api_key=api_key or "", api_base=api_base,
+                timeout=embed_timeout,
+            )
 
         self.client = chromadb.PersistentClient(
             path=persist_dir,
             settings=Settings(anonymized_telemetry=False)
         )
 
-        self.collection = self.client.get_or_create_collection(
-            name=collection_name,
-            embedding_function=self.embedding_fn,
-            metadata={"hnsw:space": "cosine"}
-        )
-        self._bm25 = None  # BM25 统计缓存（首次检索时构建）
+        if self.no_vector:
+            # 复用已有 chroma 库当"文档仓库"：文档内容与向量维度无关，
+            # 所以切到 none 模式**不需要重建库**，直接把 735 个片段读出来做 BM25 即可。
+            try:
+                self.collection = self.client.get_collection(name=collection_name)
+            except Exception:
+                raise RuntimeError(
+                    f"未找到知识库 {collection_name}，纯 BM25 模式需要先建库：\n"
+                    f"    set EMBED_BACKEND=cloud & set EMBED_API_KEY=***\n"
+                    f"    python build_kb.py"
+                )
+        else:
+            self.collection = self.client.get_or_create_collection(
+                name=collection_name,
+                embedding_function=self.embedding_fn,
+                metadata={"hnsw:space": "cosine"}
+            )
+
+        self.stored_dim = None if self.no_vector else self._stored_dim()
+        if verify_dim and not self.no_vector:
+            self._verify_embedding_dimension()
+        self._bm25 = None          # BM25 统计缓存（首次检索时构建）
+        self._vec_fail_until = 0.0  # 向量通道熔断截止时间（失败后 60s 内直接走 BM25）
+        self.vector_degraded = self.no_vector
+
+    # ── 维度自检：换嵌入模型的头号事故就在这里 ──
+    def _stored_dim(self):
+        """读取库中已有向量维度（优先读 sqlite 元数据，避免把向量读进内存）"""
+        import sqlite3
+        db = os.path.join(self.persist_dir, "chroma.sqlite3")
+        try:
+            with sqlite3.connect(db) as conn:
+                row = conn.execute(
+                    "select dimension from collections where name=?", (self.collection_name,)
+                ).fetchone()
+                if row and row[0]:
+                    return int(row[0])
+        except Exception:
+            pass
+        try:
+            got = self.collection.get(limit=1, include=["embeddings"])
+            embs = got.get("embeddings")
+            if embs is not None and len(embs):
+                return len(embs[0])
+        except Exception:
+            pass
+        return None
+
+    def _verify_embedding_dimension(self):
+        """库维度 ≠ 当前嵌入维度时，启动即失败并给出可执行的重建命令。
+
+        不做这件事的后果：服务正常起来，第一个用户提问时才在 chroma 内部抛维度错误，
+        日志里只有一行 C++ 断言，排查成本极高。
+        """
+        if self.collection.count() == 0:
+            return
+        stored = self.stored_dim
+        want = getattr(self.embedding_fn, "dimension", None)
+        if stored and want and stored != want:
+            raise RuntimeError(
+                f"嵌入维度不匹配：向量库为 {stored} 维，当前嵌入后端输出 {want} 维。\n"
+                f"请用同一后端重建知识库：\n"
+                f"    set EMBED_BACKEND=cloud & set EMBED_API_KEY=***\n"
+                f"    python build_kb.py"
+            )
+        if stored and want:
+            print(f"[VectorStore] 维度自检通过：{stored} 维")
 
     def add_documents(self, texts: List[str], metadatas: List[Dict], ids: List[str]):
         """批量添加文档到向量库"""
@@ -279,10 +425,15 @@ class VectorStore:
         return docs
 
     def _vector_search(self, query: str, top_k: int = 10) -> List[Dict]:
-        """纯向量相似度检索"""
+        """纯向量相似度检索（异常不在此吞掉，交给 search() 统一熔断）"""
+        if self.no_vector:
+            return []
+        total = self.collection.count()
+        if total == 0:
+            return []
         results = self.collection.query(
             query_texts=[query],
-            n_results=top_k,
+            n_results=min(top_k, total),
             include=["documents", "metadatas", "distances"]
         )
 
@@ -358,8 +509,17 @@ class VectorStore:
         query = expand_query(query)
 
         # Step 1: 向量检索（扩大候选集，避免正确片段被截断）
-        vec_results = self._vector_search(query, top_k=max(20, top_k * 3))
-        vec_map = {d["id"]: d for d in vec_results}
+        # 云端嵌入意味着这一步是「网络调用」，必须可失败：失败后熔断 60 秒，
+        # 期间所有查询走纯 BM25。宁可召回略弱，也不能让用户看到 500 / 等到超时。
+        vec_map = {}
+        if time.time() >= self._vec_fail_until:
+            try:
+                vec_results = self._vector_search(query, top_k=max(20, top_k * 3))
+                vec_map = {d["id"]: d for d in vec_results}
+            except Exception as e:
+                self._vec_fail_until = time.time() + 60
+                self.vector_degraded = True
+                print(f"[VectorStore] 向量检索失败，60s 内降级纯 BM25 —— {type(e).__name__}: {e}")
 
         # Step 2: BM25 关键词检索（带 IDF，罕见术语权重更高）
         all_docs = self._get_all_documents()
@@ -376,12 +536,17 @@ class VectorStore:
             if len(t) >= 2 and idx.get("df", {}).get(t, 0) <= 5
         }
 
+        # 权重自适应：向量通道不可用时把权重整体让给 BM25，
+        # 否则所有片段的 hybrid 上限只有 0.45，会被下面的 0.05 阈值正常放行、
+        # 但排序基准与向量模式不可比，阈值也失去意义。
+        w_vec, w_kw = (0.55, 0.45) if vec_map else (0.0, 1.0)
+
         for doc in all_docs:
             vec_score = vec_map.get(doc["id"], {}).get("score", 0.0)
             kw_score = (bm25.get(doc["id"], 0.0) / max_bm25) if max_bm25 > 0 else 0.0
             doc["score"] = vec_score
             doc["keyword_score"] = kw_score
-            hybrid = 0.55 * vec_score + 0.45 * kw_score
+            hybrid = w_vec * vec_score + w_kw * kw_score
             if rare_terms:
                 freqs = idx.get("freqs", {}).get(doc["id"], {})
                 if any(freqs.get(t, 0) for t in rare_terms):
@@ -401,8 +566,10 @@ class VectorStore:
         return self.collection.count()
 
 
-def build_knowledge_base(knowledge_dir: str, persist_dir: str, api_key: str = None, api_base: str = "https://api.siliconflow.cn/v1", embed_backend: str = "zhipu"):
-    """一次性构建知识库"""
+def build_knowledge_base(knowledge_dir: str, persist_dir: str, api_key: str = None,
+                         api_base: str = "https://api.siliconflow.cn/v1",
+                         embed_backend: str = "cloud"):
+    """一次性构建知识库（换嵌入后端时必须重跑，不同模型的向量空间不通用）"""
     from document_loader import DocumentLoader, chunks_to_texts_metadatas
 
     loader = DocumentLoader(knowledge_dir)
@@ -414,13 +581,19 @@ def build_knowledge_base(knowledge_dir: str, persist_dir: str, api_key: str = No
 
     texts, metadatas, ids = chunks_to_texts_metadatas(chunks)
 
-    store = VectorStore(persist_dir=persist_dir, api_key=api_key, api_base=api_base, embed_backend=embed_backend)
+    # 顺序很关键：必须"先构造（关闭维度自检）→ 再删旧 collection → 重新构造"。
+    # 若开着自检直接构造，旧库 512 维 / 新后端 1024 维会立刻抛错，
+    # 重建流程永远走不到第一步——这就是"换模型后建库脚本自己报错"的经典死锁。
+    store = VectorStore(persist_dir=persist_dir, api_key=api_key, api_base=api_base,
+                        embed_backend=embed_backend, verify_dim=False)
 
     if store.count() > 0:
-        print(f"[build] 检测到已有 {store.count()} 条数据，正在重建...")
+        print(f"[build] 检测到已有 {store.count()} 条数据（{store.stored_dim} 维），正在重建...")
         store.client.delete_collection(store.collection_name)
-        store = VectorStore(persist_dir=persist_dir, api_key=api_key, api_base=api_base, embed_backend=embed_backend)
+        store = VectorStore(persist_dir=persist_dir, api_key=api_key, api_base=api_base,
+                            embed_backend=embed_backend, verify_dim=False)
 
     store.add_documents(texts, metadatas, ids)
-    print(f"[build] 知识库构建完成，共 {store.count()} 条向量")
+    dim = store._stored_dim()
+    print(f"[build] 知识库构建完成，共 {store.count()} 条向量，维度 {dim}")
     return store

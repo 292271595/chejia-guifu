@@ -5,12 +5,26 @@
 ## 系统架构
 
 ```
-用户提问 → 向量检索(ChromaDB) → 获取最相关片段 → 拼接Prompt → 大模型回答
-                   ↑
-         本地Embedding模型(sentence-transformers)
-                   ↑
-         车驾管知识库(3份Markdown文档)
+用户提问 → 事实层（确定性秒答） ─命中─→ 直接返回法条
+                │未命中
+                ↓
+        混合检索：向量(0.55) + BM25(0.45) → 取 top-5 片段
+                ↑                      ↓
+      嵌入服务（可插拔，见下）      拼接 Prompt → 大模型(glm-4-flash) 单遍生成
+                ↑                      ↓
+        车驾管知识库(735 个片段)   带来源引用的答案（小程序按 blocks 渲染）
 ```
+
+嵌入后端是可插拔的，三种任选，由 `EMBED_BACKEND` 控制：
+
+| 后端 | 值 | 维度 | 依赖 | 适用 |
+|---|---|---|---|---|
+| 云端嵌入 | `cloud`（默认） | 1024 | 一个 API Key | 云托管 0.5 核 1G，镜像约 300MB |
+| 本地模型 | `local` | 512 | torch，镜像约 1.5GB | 断网环境、1 核 2G |
+| 纯 BM25 | `none` | — | 无 | 嵌入服务不可用时的兜底（口语问句召回变弱） |
+
+> 换后端 = 换向量空间，必须重建库：`python tools/rebuild_kb.py --key sk-xxx`
+
 
 ## 目录结构
 
@@ -76,11 +90,12 @@ python -m uvicorn main:app --host 0.0.0.0 --port 8000
 
 ## 技术栈
 
-- **向量数据库**: ChromaDB (免费、本地、持久化)
-- **Embedding**: sentence-transformers `all-MiniLM-L6-v2` (免费、本地)
-- **大模型**: DeepSeek Chat (OpenAI兼容API，可替换为任意兼容模型)
-- **后端**: FastAPI + Uvicorn
-- **前端**: 纯HTML+CSS+JS (零依赖)
+- **向量数据库**: ChromaDB 1.5.9（版本锁死，1.x 持久化格式与 0.4/0.5 不兼容）
+- **Embedding**: 可插拔——云端 `BAAI/bge-m3`（1024 维）/ 本地 `bge-small-zh-v1.5`（512 维）/ 纯 BM25
+- **检索**: 向量 0.55 + BM25 0.45 混合，口语问句经 `expand_query` 补法条术语
+- **大模型**: 智谱 `glm-4-flash`（长期免费，OpenAI 兼容接口）
+- **后端**: FastAPI + Uvicorn（单 worker，云端 0.5 核 1G 可跑）
+- **前端**: 微信小程序（原生，云托管 `callContainer` 通道）+ 纯 HTML 页面
 
 ## 核心特性
 

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""验证智谱 GLM-4-Flash 免费模型是否可用（Key 从 start_backend.bat 读取，避免明文）"""
+"""验证智谱 GLM-4-Flash 免费模型是否可用（Key 从项目根 .env 读取，避免明文）"""
 import io
 import re
 import sys
@@ -9,17 +9,16 @@ import urllib.error
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
-BAT = r"C:\RAG\start_backend.bat"
+ENV = r"C:\RAG\rag-vehicle-system\.env"
 key = None
-with open(BAT, "r", encoding="utf-8", errors="ignore") as f:
-    for line in f:
-        m = re.match(r"\s*set\s+API_KEY=(.+)", line.strip(), re.I)
-        if m:
-            key = m.group(1).strip()
-            break
+for line in open(ENV, "r", encoding="utf-8", errors="ignore"):
+    line = line.strip()
+    if line.startswith("API_KEY=") and not line.startswith("#"):
+        key = line.split("=", 1)[1].strip().strip('"').strip("'")
+        break
 
 if not key:
-    print("NO_KEY_FOUND_IN_BAT")
+    print("NO_KEY_FOUND_IN_ENV")
     sys.exit(1)
 
 print("key_prefix=%s... len=%d" % (key[:8], len(key)))

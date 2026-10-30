@@ -9,7 +9,8 @@ sys.path.insert(0, r"C:\RAG\rag-vehicle-system\backend")
 
 from vector_store import VectorStore
 
-store = VectorStore(persist_dir=r"C:\RAG\rag-vehicle-system\chroma_db", embed_backend="local")
+store = VectorStore(persist_dir=r"C:\RAG\rag-vehicle-system\chroma_db",
+                    embed_backend=os.getenv("EMBED_BACKEND", "local"))
 print("库内片段数:", store.count())
 
 QUERIES = [

@@ -9,13 +9,27 @@ import time
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.path.insert(0, r"C:\RAG\rag-vehicle-system\backend")
 
-BAT = r"C:\RAG\start_backend.bat"
-key = ""
-for line in open(BAT, "r", encoding="utf-8", errors="ignore"):
-    m = re.match(r"\s*set\s+API_KEY=(.+)", line.strip(), re.I)
-    if m:
-        key = m.group(1).strip()
-        break
+# 配置统一从项目根 .env 读：start_backend.bat 里的明文 Key 已移除，
+# 脚本若继续从 bat 里抠 Key，会静默拿到空字符串，最后报一个跟配置无关的错。
+ENV_PATH = r"C:\RAG\rag-vehicle-system\.env"
+
+
+def _load_env(path):
+    cfg = {}
+    if not os.path.isfile(path):
+        return cfg
+    for line in open(path, encoding="utf-8", errors="ignore"):
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            cfg[k.strip()] = v.strip().strip('"').strip("'")
+    return cfg
+
+
+CFG = _load_env(ENV_PATH)
+key = CFG.get("API_KEY", "") or os.getenv("API_KEY", "")
+EMBED_BACKEND = CFG.get("EMBED_BACKEND", "cloud")
+EMBED_KEY = CFG.get("EMBED_API_KEY", "") or key
 
 from rag_engine import create_rag_engine
 
@@ -24,7 +38,9 @@ engine = create_rag_engine(
     "https://open.bigmodel.cn/api/paas/v4",
     key,
     "glm-4-flash",
-    embed_backend="local",
+    embed_backend=EMBED_BACKEND,
+    embed_api_key=EMBED_KEY,
+    embed_api_base=CFG.get("EMBED_API_BASE", ""),
 )
 
 QUESTIONS = [

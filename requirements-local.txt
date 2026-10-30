@@ -1,0 +1,7 @@
+# 可选依赖：仅当 EMBED_BACKEND=local（本地嵌入，不依赖外部 API）时需要。
+# 默认部署**不装**这些——它们会让镜像从约 300MB 涨到 1.5GB，
+# 且 torch 常驻内存 500MB+，云托管 0.5 核 1G 规格直接 OOM。
+# 安装（必须先装 CPU 版 torch，否则会拉 CUDA 版）：
+#   pip install torch==2.12.0 --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements-local.txt
+sentence-transformers==5.5.1

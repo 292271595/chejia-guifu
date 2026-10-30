@@ -7,5 +7,8 @@ openai==2.41.1
 python-multipart>=0.0.6
 pydantic>=2.0.0
 python-docx>=0.8.0
-# 本地嵌入（EMBED_BACKEND=local）的真实依赖，之前漏登记，容器里会 ImportError
-sentence-transformers==5.5.1
+
+# 注意：这里**故意不装** torch / sentence-transformers。
+# 默认嵌入走后端 API（EMBED_BACKEND=cloud），镜像从 1.5GB 降到约 300MB，
+# 常驻内存从 500MB+ 降到 130MB 左右，0.5 核 1G 规格才跑得动。
+# 需要本地嵌入时另装：pip install -r requirements-local.txt

@@ -3,6 +3,7 @@
 不调用任何生成模型，秒级完成。用于判断是否需要升级嵌入模型。
 """
 import io
+import os
 import re
 import sys
 from collections import defaultdict
@@ -12,7 +13,9 @@ sys.path.insert(0, r"C:\RAG\rag-vehicle-system\backend")
 
 from vector_store import VectorStore, _bm25_tokenize
 
-STORE = VectorStore(persist_dir=r"C:\RAG\rag-vehicle-system\chroma_db", embed_backend="local")
+# 后端跟随 .env：换嵌入模型后本基准要能测新库，不能写死 local
+STORE = VectorStore(persist_dir=r"C:\RAG\rag-vehicle-system\chroma_db",
+                    embed_backend=os.getenv("EMBED_BACKEND", "local"))
 
 # (问题, 期望命中片段中的锚点关键词)
 CASES = [

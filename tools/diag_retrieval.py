@@ -4,6 +4,7 @@
 用于区分：若锚点已在检索结果里而回答仍错 → 生成侧责任；若不在 → 检索侧责任。
 """
 import io
+import os
 import sys
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -37,7 +38,8 @@ CASES = [
 
 
 def main():
-    store = VectorStore(persist_dir=r"C:\RAG\rag-vehicle-system\chroma_db", embed_backend="local")
+    store = VectorStore(persist_dir=r"C:\RAG\rag-vehicle-system\chroma_db",
+                        embed_backend=os.getenv("EMBED_BACKEND", "local"))
     ok_count = 0
     for idx, q, anchors in CASES:
         results = store.search(q, top_k=8)
