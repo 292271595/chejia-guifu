@@ -106,15 +106,23 @@ init_error: str = ""
 
 
 def init_engine():
-    """初始化 RAG 引擎（在服务启动时调用）"""
+    """初始化 RAG 引擎（在服务启动时调用）。
+
+    关键设计：**缺生成 key 不再阻止引擎初始化**。
+    检索靠嵌入 key（EMBED_API_KEY），生成靠模型 key（API_KEY），是两套独立凭据。
+    历史实现只要 API_KEY 为空就 return False，后果是：
+      · /health 只说「缺少生成侧 API_KEY」，
+      · 向量库有没有加载、嵌入通不通，全部看不到，
+      · 排查时只能靠猜（实际已经为此多跑了三轮部署）。
+    现在改为：嵌入通则引擎照常起来，生成侧缺失降级为「返回检索原文」，
+    并在 /health 的 gen_ready 字段如实标注。
+    """
     global rag_engine, init_error
     if not API_KEY or API_KEY == "your-api-key-here":
-        init_error = "缺少生成侧 API_KEY"
         print("=" * 60)
-        print("警告: 未设置 API_KEY，请在环境变量中设置或修改 main.py")
-        print("启动后你需要配置 API 才能使用问答功能")
+        print("警告: 未设置生成侧 API_KEY —— 引擎仍会初始化（可检索），")
+        print("      但回答会降级为「检索原文、未经 AI 整理」。")
         print("=" * 60)
-        return False
 
     try:
         rag_engine = create_rag_engine(
@@ -124,8 +132,9 @@ def init_engine():
             embed_api_base=EMBED_API_BASE,
         )
         print(f"[init] RAG 引擎初始化成功（嵌入={EMBED_BACKEND}，"
-              f"维度={getattr(getattr(rag_engine, 'vector_store', None), 'stored_dim', None)}）")
-        init_error = ""
+              f"维度={getattr(getattr(rag_engine, 'vector_store', None), 'stored_dim', None)}，"
+              f"生成={'就绪' if getattr(rag_engine, 'gen_ready', False) else '缺失'}）")
+        init_error = "" if getattr(rag_engine, "gen_ready", False) else "生成侧 API_KEY 未配置（降级为检索原文）"
         return True
     except Exception as e:
         init_error = f"{type(e).__name__}: {e}"
@@ -243,7 +252,8 @@ def query(request: QueryRequest, http_request: Request):
     if not rag_engine:
         return JSONResponse({
             "success": False,
-            "message": "RAG 引擎未初始化，请检查 API_KEY 配置和知识库构建。",
+            "message": f"RAG 引擎未初始化：{init_error or '未知原因'}。"
+                       "请访问 /api/env 查看哪个环境变量没进容器。",
             "answer": "",
             "blocks": [],
             "sources": []
@@ -370,11 +380,78 @@ def health():
     return {
         "status": "ok",
         "engine": bool(rag_engine),
-        "engine_error": init_error if not rag_engine else "",
+        "gen_ready": bool(getattr(rag_engine, "gen_ready", False)) if rag_engine else False,
+        "engine_error": init_error,
         "embed_backend": EMBED_BACKEND,
         "embed_model": model_name,
         "embed_dim": dim,
         "embed_vector": vec_ok,
+    }
+
+
+# 必需的环境变量清单：变量名 → 是否含密钥（影响展示方式）
+_REQUIRED_ENV = {
+    "API_KEY": True,
+    "GEN_BACKEND": False,
+    "MODEL": False,
+    "EMBED_BACKEND": False,   # cloud / local / none，必须明文可见，填错就崩
+    "EMBED_API_BASE": False,
+    "EMBED_MODEL": False,
+    "EMBED_API_KEY": True,
+    "QUERY_TIMEOUT": False,
+}
+
+
+def _mask(v: str, secret: bool) -> str:
+    """密钥只露前 3 位 + 长度：足够判断「是不是这条、有没有被截断」，
+    又不至于因为公网可访问而把 Key 泄露出去（控制台随时可核对全文）。"""
+    if not v:
+        return ""
+    if not secret:
+        return v
+    return f"{v[:3]}***(len={len(v)})"
+
+
+@app.get("/api/env")
+def env_report():
+    """容器内环境变量体检：解决「控制台填了，但容器里到底有没有」的反复扯皮。
+
+    只回「在不在 + 脱敏后的值」，不回完整密钥。
+    设计动机：云托管环境变量是版本级配置，填了没发布、发布没成功、名字拼错、
+    值带空格，四种情况在 /health 里表现完全一样（都是 engine=false），
+    靠猜只能一轮轮重试。这个接口把四种情况一次性区分开。
+    """
+    items = {}
+    missing = []
+    blank = []
+    for k, secret in _REQUIRED_ENV.items():
+        raw = os.getenv(k)
+        if raw is None:
+            items[k] = {"present": False, "value": ""}
+            missing.append(k)
+        elif raw.strip() == "":
+            items[k] = {"present": True, "value": "(空字符串)"}
+            blank.append(k)
+        else:
+            # 值首尾带空格是控制台粘贴的高频错误，单独标出来
+            dirty = raw != raw.strip()
+            items[k] = {
+                "present": True,
+                "value": _mask(raw.strip(), secret),
+                "trailing_space": dirty,
+            }
+            if dirty:
+                blank.append(k + "(首尾有空格)")
+    return {
+        "missing": missing,
+        "abnormal": blank,
+        "ok": not missing and not blank,
+        "vars": items,
+        "hint": (
+            "missing 里的变量在容器里根本不存在 → 控制台没保存成功，或保存后没发布新版本"
+            if missing else
+            ("abnormal 里的变量值异常（空/带空格）→ 重新粘贴" if blank else "环境变量齐全")
+        ),
     }
 
 
@@ -384,13 +461,16 @@ def status():
     if not rag_engine:
         return {
             "status": "not_ready",
-            "message": "RAG 引擎未就绪，请检查配置",
-            "document_count": 0
+            "message": f"RAG 引擎未就绪：{init_error or '未知原因'}",
+            "document_count": 0,
+            "gen_ready": False,
         }
     return {
         "status": "ready",
-        "message": "服务就绪",
-        "document_count": rag_engine.vector_store.count()
+        "message": "服务就绪" if getattr(rag_engine, "gen_ready", False)
+                   else "检索就绪；生成侧 API_KEY 缺失，回答将降级为检索原文",
+        "document_count": rag_engine.vector_store.count(),
+        "gen_ready": bool(getattr(rag_engine, "gen_ready", False)),
     }
 
 

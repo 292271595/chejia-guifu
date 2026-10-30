@@ -8,9 +8,10 @@
     python tools/diag_cloud.py https://xxxx.sh.run.tcloudbase.com --full   # 含 RAG 端到端计时
 
 检查项：
-    1. /health        → 引擎是否初始化、嵌入后端/维度/是否熔断
-    2. /api/status    → 向量条数（必须 735）
-    3. /api/query     → 事实层（应 0.x 秒）与 RAG（应 <12s）各一发，验 blocks 结构
+    1. /health        → 引擎是否初始化、生成侧是否就绪、嵌入后端/维度/是否熔断
+    2. /api/env       → 容器内 8 条环境变量到底注入了没有（缺失/空值/带空格分别报）
+    3. /api/status    → 向量条数（必须 735）
+    4. /api/query     → 事实层（应 0.x 秒）与 RAG（应 <12s）各一发，验 blocks 结构
 
 任何一项不符合预期都会给出具体原因和处置建议，不是只打一行 FAIL。
 """
@@ -63,7 +64,7 @@ def main():
     problems = []
 
     # ---------- 1. /health ----------
-    print("\n[1/3] GET /health")
+    print("\n[1/4] GET /health")
     h, el, err = req(base, "/health", timeout=15)
     if err:
         print(f"  {FAIL} 请求失败（{el:.2f}s）：{err}")
@@ -74,21 +75,37 @@ def main():
         if not h.get("engine"):
             err_msg = h.get("engine_error") or "未知"
             print(f"  {FAIL} engine=false，原因：{err_msg}")
-            if "API_KEY" in err_msg and "EMBED" not in err_msg:
-                print("         → 缺 API_KEY（生成侧）：服务设置 → 环境变量补上后重启")
-            elif "EMBED" in err_msg or "embed" in err_msg.lower():
-                print("         → 嵌入侧异常：查 EMBED_API_KEY 是否填了、硅基流动是否欠费")
-            else:
-                print("         → 看这条原因本身，通常是 Key 有空格或维度不匹配")
+            print("         → 下一步的 /api/env 会直接列出哪个变量没进容器，先看那一步")
             problems.append("引擎未初始化")
+        elif h.get("gen_ready") is False:
+            print(f"  {WARN} 检索正常，但生成侧未就绪：{h.get('engine_error')}")
+            print("         → 回答会降级为「检索原文」，查 API_KEY")
         if h.get("embed_dim") not in (1024, None):
             print(f"  {FAIL} embed_dim={h.get('embed_dim')}，应为 1024")
             problems.append("维度错误")
         if h.get("embed_vector") is False:
             print(f"  {WARN} 向量通道已熔断，当前退化为纯 BM25（能答但口语问句召回下降）")
 
-    # ---------- 2. /api/status ----------
-    print("\n[2/3] GET /api/status")
+    # ---------- 2. /api/env ----------
+    print("\n[2/4] GET /api/env（容器内环境变量体检）")
+    e, el, err = req(base, "/api/env", timeout=15)
+    if err:
+        print(f"  {SKIP} 接口不存在：{err}")
+        print("        → 云端跑的是旧镜像（该接口是后加的），重新发布一次即可")
+    elif not e.get("ok"):
+        print(f"  {FAIL} missing={e.get('missing')} abnormal={e.get('abnormal')}")
+        print(f"         → {e.get('hint')}")
+        for k in (e.get("missing") or []):
+            print(f"         · {k}：容器里不存在 → 控制台「服务设置 → 环境变量」没保存，或没发布新版本")
+        for k in (e.get("abnormal") or []):
+            print(f"         · {k}：值异常（空 / 首尾有空格）→ 重新粘贴，注意别带空格")
+        problems.append("环境变量未注入")
+    else:
+        shown = {k: v.get("value") for k, v in (e.get("vars") or {}).items()}
+        print(f"  {PASS} 8 条齐全  {json.dumps(shown, ensure_ascii=False)}")
+
+    # ---------- 3. /api/status ----------
+    print("\n[3/4] GET /api/status")
     s, el, err = req(base, "/api/status", timeout=20)
     if err:
         print(f"  {FAIL} 失败：{err}")
@@ -111,7 +128,7 @@ def main():
             print(f"  {WARN} document_count={n}，预期 735（可能库版本与代码不一致）")
 
     # ---------- 3. /api/query ----------
-    print("\n[3/3] POST /api/query")
+    print("\n[4/4] POST /api/query")
     d, el, err = req(base, "/api/query", {"question": FACT_Q, "format": "blocks"})
     engine_ok = bool(h and h.get("engine"))
     if err:
@@ -141,7 +158,7 @@ def main():
             problems.append("RAG 超时或报错")
         else:
             txt = " ".join(b.get("text", "") for b in (d2.get("blocks") or []))
-            degraded = "AI 整理超时" in txt
+            degraded = "AI 整理" in txt
             if d2.get("fact_hit"):
                 print(f"  {WARN} {el2:.2f}s 该问句被事实层接走（fact_hit=true），未测到 RAG 生成链路")
                 print("        → 换一条跨主题问句重测，否则这条的耗时没有参考价值")

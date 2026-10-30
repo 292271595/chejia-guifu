@@ -38,12 +38,21 @@ class RAGEngine:
         self.vector_store = vector_store
         self.model = model
 
-        self.client = openai.OpenAI(
-            base_url=api_base,
-            api_key=api_key,
-            timeout=30.0,  # 兜底上限；有预算控制的调用会用 with_options 覆盖成更小的值
-            max_retries=1,
-        )
+        # 生成侧 key 缺失时不在这里抛错：检索（嵌入 key）和生成（模型 key）是两套凭据，
+        # 一个缺失不应该让整个引擎起不来。缺 key 时 client=None，生成阶段抛
+        # RuntimeError，由 query() 统一降级为「检索原文」，服务仍然可用、可诊断。
+        # 历史实现是在 init_engine 里直接 return False，结果：一个变量填错，
+        # /health 只说「缺少生成侧 API_KEY」，连向量库有没有加载成功都看不到。
+        self.client = None
+        self.gen_ready = False
+        if api_key:
+            self.client = openai.OpenAI(
+                base_url=api_base,
+                api_key=api_key,
+                timeout=30.0,  # 兜底上限；有预算控制的调用会用 with_options 覆盖成更小的值
+                max_retries=1,
+            )
+            self.gen_ready = True
 
         import datetime
         today = datetime.date.today().strftime("%Y年%m月%d日")
@@ -187,8 +196,10 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
             max_tokens=max_tokens,
         )
         client = self.client
+        if client is None:
+            raise RuntimeError("生成侧 API_KEY 未配置，跳过生成直接返回检索原文")
         if timeout is not None:
-            client = self.client.with_options(timeout=max(1.0, timeout), max_retries=0)
+            client = client.with_options(timeout=max(1.0, timeout), max_retries=0)
         return client.chat.completions.create(**payload).choices[0].message.content.strip()
 
     def _call_llm_until(self, system_prompt: str, user_message: str,
