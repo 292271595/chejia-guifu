@@ -138,6 +138,12 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
 {{context}}
 === 知识库内容结束 ===
 
+=== 输出要求（硬约束） ===
+- **总字数不超过 350 字**，直接给结论，不铺垫、不复述问题、不写"根据知识库"。
+- 用户一次问多件事时，用 1./2. 分点，每点一句话说清结论 + 依据条款号。
+- 引用写到"《XX规定》第X条"即可，不要抄原文；原文交给下方来源列表。
+- 宁可少说，不要为了完整而堆砌——超长回答会让用户在手机上读不完。
+
 请回答用户问题：{{question}}"""
 
     def _format_context(self, search_results: List[Dict], max_chars: int = 600) -> str:
@@ -210,7 +216,7 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
         返回: {"answer": "...", "sources": [...]}
 
         性能约束：微信云托管 callContainer 的接口超时为 **15 秒硬上限**，
-        因此本方法以 budget=10 秒为预算（留 5 秒给网络、序列化与冷启动抖动）。
+        因此本方法以 budget 为生成预算（由调用方按 QUERY_TIMEOUT 传入，默认 10 秒）。
         超出预算不返回错误，而是降级返回检索到的法规原文——用户总能看到东西。
         历史实现串行调两次 LLM（生成 + 自我验证），实测 8.6~19.0 秒，
         已改为单遍生成 + 确定性代码核对，详见「防线三」。
@@ -271,7 +277,7 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
 
         try:
             draft_answer = self._call_llm_until(gen_prompt, user_question,
-                                                max_tokens=900, deadline=deadline)
+                                                max_tokens=750, deadline=deadline)
         except TimeoutError as e:
             print(f"[RAGEngine] 生成超时（{e}），降级为检索原文")
             return self._fallback_from_context(filtered, "budget")

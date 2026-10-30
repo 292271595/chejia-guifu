@@ -19,6 +19,32 @@ from chromadb import EmbeddingFunction, Documents, Embeddings
 from openai import OpenAI
 
 
+# ── .env 加载（零依赖） ──
+# 放在本模块而不是各入口脚本里：main.py / build_kb.py / tools/*.py 全都会经过这里。
+# 先前只有 main.py 加载 .env，tools 下的评测脚本读不到 EMBED_BACKEND，会静默回落 local 后端，
+# 于是「建完 1024 维库、一跑评测就报维度不匹配」——配置只在部分入口生效是典型坑。
+def _load_dotenv() -> None:
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(root, ".env")
+    if not os.path.isfile(path):
+        return
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                k, v = k.strip(), v.strip().strip('"').strip("'")
+                if k and v:
+                    os.environ.setdefault(k, v)
+    except Exception:
+        pass
+
+
+_load_dotenv()
+
+
 class CloudEmbeddingFunction(EmbeddingFunction):
     """云端嵌入（OpenAI 兼容接口）—— 硅基流动 BAAI/bge-m3（免费、1024 维、国内直连）。
 
@@ -311,11 +337,16 @@ class VectorStore:
     """
 
     def __init__(self, persist_dir: str, api_key: str = None,
-                 api_base: str = "https://api.siliconflow.cn/v1",
+                 api_base: str = "",
                  collection_name: str = "vehicle_knowledge", embed_backend: str = "cloud",
                  embed_timeout: float = 8.0, verify_dim: bool = True):
         self.persist_dir = persist_dir
         self.collection_name = collection_name
+        # key/base 为空时回落到 .env：调用方（tools 下各种脚本）不必逐个传参，
+        # 否则每加一个脚本就多一处「忘了传 key」的坑
+        api_key = api_key or os.getenv("EMBED_API_KEY", "") or os.getenv("API_KEY", "")
+        if not api_base:
+            api_base = os.getenv("EMBED_API_BASE", "https://api.siliconflow.cn/v1")
         self.no_vector = (embed_backend or "").strip().lower() == "none"
         print(f"[VectorStore] 嵌入后端: {embed_backend}"
               + ("（纯 BM25 模式，不产生/不使用向量）" if self.no_vector else ""))

@@ -282,10 +282,15 @@ def query(request: QueryRequest, http_request: Request):
         }
 
     try:
-        fut = _EXECUTOR.submit(rag_engine.query, q)
+        # 生成预算与 QUERY_TIMEOUT 对齐（留 0.8s 给 blocks 序列化与网络回程）。
+        # 之前 engine 内部硬编码 10s、外层 12s，中间 2s 是空的：
+        # 生成 10.0s 就降级，而外层还在等到 12s，等于白扔掉 2s 预算。
+        # 现在改一处 QUERY_TIMEOUT，内外同步。
+        gen_budget = max(6.0, QUERY_TIMEOUT - 0.8)
+        fut = _EXECUTOR.submit(lambda: rag_engine.query(q, budget=gen_budget))
         result = fut.result(timeout=QUERY_TIMEOUT)
     except concurrent.futures.TimeoutError:
-        # 最后一道保险：正常情况下 RAGEngine 自己会在 10 秒预算内降级返回检索原文，
+        # 最后一道保险：正常情况下 RAGEngine 会按 gen_budget（=QUERY_TIMEOUT-0.8）降级返回检索原文，
         # 走到这里说明排队或检索本身已超预算（并发高峰）。
         # 不再直接吐一句「服务繁忙」，而是补一次纯检索（毫秒级），把法条原文交给用户。
         fallback = {}
