@@ -1,23 +1,37 @@
 """
-RAG问答引擎 —— 检索增强生成 + 自我验证
-三道防线防止编造：
-1. 检索覆盖：top_k=8，更多上下文减少盲区
+RAG问答引擎 —— 检索增强生成 + 确定性核对
+四道防线防止编造：
+0. 确定性事实层：命中即查表直答，不经 LLM（见 fact_table）
+1. 检索覆盖：top_k=5 + 单片段截断 600 字，控制 prompt 在 3000 字量级
 2. 来源强制：每个事实性陈述必须标注[片段X]
-3. 自我验证：生成后用第二遍LLM检查答案是否有编造
+3. 数字核对：纯代码检查答案中的法规数字是否在上下文中出现（不调 LLM）
+4. 确定性护栏：正则纠正车型/色盲/记分/吊销注销等硬错误
+
+⏱ 性能红线：云托管 callContainer 超时 15s，本引擎端到端必须 < 12s。
+   历史实现串行调两次 LLM，实测 8.6~19.0s，已移除第二遍 LLM 验证。
 """
 from typing import List, Dict
 import re
+import time
+import concurrent.futures
 import openai
 from vector_store import VectorStore
+
+# LLM 调用的硬超时执行器。
+# ⚠️ 不能用 openai SDK 的 timeout 参数来控总时长：它是 httpx 的 read timeout，
+# 语义是「两次数据块之间的间隔」，服务端缓慢但持续吐字时可以远超设定值
+# （实测设 9.9s、实际 16.7s）。只有 future.result(timeout=) 才是真正的墙钟硬超时。
+_LLM_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=8,
+                                                      thread_name_prefix="llm")
 
 
 class RAGEngine:
     """
-    RAG 问答引擎 + 自我验证，流程：
-    1. 检索 top_k=8 个最相关片段
-    2. 第一遍生成：基于上下文生成草稿答案（必须标注来源）
-    3. 第二遍验证：检查草稿中每个事实是否能在上下文中找到原文支持
-    4. 输出最终答案
+    RAG 问答引擎，流程：
+    1. 检索 top_k=5 个最相关片段（每片段截断 600 字）
+    2. 单遍生成：基于上下文生成答案（必须标注来源）
+    3. 数字核对：纯代码校验，不调 LLM
+    4. 确定性护栏：正则纠正法规硬错误
     """
 
     def __init__(self, vector_store: VectorStore, api_base: str, api_key: str, model: str = "glm-4-flash"):
@@ -27,7 +41,7 @@ class RAGEngine:
         self.client = openai.OpenAI(
             base_url=api_base,
             api_key=api_key,
-            timeout=120.0,  # LLM 调用超时，防止免费模型排队时无限挂起
+            timeout=30.0,  # 兜底上限；有预算控制的调用会用 with_options 覆盖成更小的值
             max_retries=1,
         )
 
@@ -126,19 +140,38 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
 
 请回答用户问题：{{question}}"""
 
-    def _format_context(self, search_results: List[Dict]) -> str:
-        """将检索结果格式化为 prompt 上下文"""
+    def _format_context(self, search_results: List[Dict], max_chars: int = 600) -> str:
+        """将检索结果格式化为 prompt 上下文。
+
+        max_chars 单片段截断：法条片段动辄 1500+ 字，8 条拼起来 prompt 超过 1 万字，
+        是生成耗时的主因（实测 prompt 10014~13365 字）。截到 600 字并尽量在句子边界
+        断开，prompt 压到 3000 字量级，生成耗时随输入 token 数近似线性下降。
+        """
         context_parts = []
         for i, result in enumerate(search_results):
-            content = result["content"]
+            content = (result.get("content") or "").strip()
+            if max_chars and len(content) > max_chars:
+                head = content[:max_chars]
+                # 优先在句末断开，避免把一条款切成半句导致模型误读
+                cut = max(head.rfind("。"), head.rfind("；"), head.rfind("\n"))
+                if cut >= int(max_chars * 0.6):
+                    head = head[:cut + 1]
+                content = head + "\n…（片段后略）"
             source = result["metadata"].get("title", "未知")
             score = f"{result['score']:.2f}"
             context_parts.append(f"[片段{i+1}] (来源: {source}, 相似度: {score})\n{content}\n")
         return "\n".join(context_parts)
 
-    def _call_llm(self, system_prompt: str, user_message: str, max_tokens: int = 1500) -> str:
-        """调用大模型，返回回答文本"""
-        response = self.client.chat.completions.create(
+    def _call_llm(self, system_prompt: str, user_message: str, max_tokens: int = 900,
+                  timeout: float = None) -> str:
+        """调用大模型，返回回答文本。
+
+        传了 timeout 时用 with_options 派生一个「不重试 + 限定超时」的子 client：
+        - 不重试：这层调用已经被 _call_llm_until 用墙钟卡死，SDK 再重试只会让
+          被丢弃的线程多活一轮，把线程池占满，反而拖垮后续用户的请求。
+        - 限定超时：让被丢弃的线程在 timeout 内自然结束，不会挂满 120s。
+        """
+        payload = dict(
             model=self.model,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -147,17 +180,46 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
             temperature=0.05,  # 极低温度，减少随机性
             max_tokens=max_tokens,
         )
-        return response.choices[0].message.content.strip()
+        client = self.client
+        if timeout is not None:
+            client = self.client.with_options(timeout=max(1.0, timeout), max_retries=0)
+        return client.chat.completions.create(**payload).choices[0].message.content.strip()
 
-    def query(self, user_question: str, top_k: int = 8) -> Dict:
+    def _call_llm_until(self, system_prompt: str, user_message: str,
+                        max_tokens: int, deadline: float) -> str:
+        """带墙钟硬超时的 LLM 调用：剩余时间不足即抛 TimeoutError。
+
+        线程池里的请求不会因为 future 超时被真正终止（Python 无法强杀线程），
+        但它的结果会被丢弃，调用方按预算准时降级。LLM 请求自身也带 timeout，
+        泄漏的线程会在最迟 timeout 秒后自然结束，不会无限堆积。
         """
-        执行 RAG 查询 + 自我验证
+        remaining = deadline - time.time()
+        if remaining < 1.5:
+            raise TimeoutError(f"预算不足（剩余 {remaining:.1f}s）")
+        fut = _LLM_EXECUTOR.submit(self._call_llm, system_prompt, user_message,
+                                   max_tokens, remaining)
+        try:
+            return fut.result(timeout=remaining)
+        except concurrent.futures.TimeoutError:
+            fut.cancel()
+            raise TimeoutError(f"LLM 超出预算（{remaining:.1f}s 未返回）")
+
+    def query(self, user_question: str, top_k: int = 5, budget: float = 10.0) -> Dict:
+        """
+        执行 RAG 查询（单遍生成 + 代码核对）
         返回: {"answer": "...", "sources": [...]}
+
+        性能约束：微信云托管 callContainer 的接口超时为 **15 秒硬上限**，
+        因此本方法以 budget=10 秒为预算（留 5 秒给网络、序列化与冷启动抖动）。
+        超出预算不返回错误，而是降级返回检索到的法规原文——用户总能看到东西。
+        历史实现串行调两次 LLM（生成 + 自我验证），实测 8.6~19.0 秒，
+        已改为单遍生成 + 确定性代码核对，详见「防线三」。
 
         架构：确定性事实层优先。
         第 0 道防线：命中 fact_table（记分/年龄/年限/准驾范围等有限枚举事实）
-                    直接查表返回，完全不经过 LLM，杜绝生成侧走样。
+        直接查表返回，完全不经过 LLM，杜绝生成侧走样。
         """
+        deadline = time.time() + budget
         # ─── 防线零：确定性事实表直答（零幻觉通道）───
         fact = None
         try:
@@ -208,54 +270,43 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
         gen_prompt = self.system_prompt_template.replace("{context}", context).replace("{question}", user_question)
 
         try:
-            draft_answer = self._call_llm(gen_prompt, user_question, max_tokens=1500)
+            draft_answer = self._call_llm_until(gen_prompt, user_question,
+                                                max_tokens=900, deadline=deadline)
+        except TimeoutError as e:
+            print(f"[RAGEngine] 生成超时（{e}），降级为检索原文")
+            return self._fallback_from_context(filtered, "budget")
         except Exception as e:
-            print(f"[RAGEngine] 生成阶段出错: {e}")
-            return {"answer": f"调用大模型API出错: {str(e)}", "sources": filtered}
+            print(f"[RAGEngine] 生成阶段失败({type(e).__name__}: {e})，降级为检索原文")
+            return self._fallback_from_context(filtered, "llm_error")
 
-        # ─── 防线三：第二遍自我验证 —— 逐条检查是否有编造 ───
-        verify_prompt = f"""你是事实核查员。请逐条核实以下回答是否严格基于知识库内容。
+        # ─── 防线三：确定性数字核对（替代原「第二遍 LLM 自我验证」）───
+        # 原实现：先调 LLM 生成，再把「草稿 + 全部片段 + 约束」喂给 LLM 做第二遍核查。
+        # 两次调用串行，实测单题 8.57s / 18.96s，其中第 2 遍独占 1.64~7.21s，
+        # 必然击穿 callContainer 的 15s 硬上限。
+        #
+        # 第二遍真正独有的价值只有一条：答案里的数字是否编造。其余职能（车型硬错误、
+        # 色盲口径、枚举截断、记分混淆、吊销≠注销）已由下方 _apply_guardrails 用
+        # 确定性正则覆盖，属于重复建设。故把「数字核对」改写为纯代码实现：
+        # 提取答案中带单位的法规数字，逐个检查是否在检索上下文出现，秒级完成且零成本。
+        verified_answer = draft_answer
+        ungrounded, total = self._check_numbers(draft_answer, context)
+        if ungrounded:
+            ratio = len(ungrounded) / total if total else 0
+            print(f"[RAGEngine] 数字核对：{len(ungrounded)}/{total} 个数字未在片段中找到依据 "
+                  f"({ratio:.0%}) -> {ungrounded[:6]}")
+            # 大面积无依据才提示用户（个别数字常因片段被截断而查不到，提示反而是噪音）
+            if total >= 3 and ratio >= 0.6:
+                verified_answer += (
+                    "\n\n【系统校验】本回答中部分数字未能与检索到的法规原文逐字对应，"
+                    "具体标准请以公安机关交通管理部门的最新口径为准。"
+                )
 
-检查规则：
-1. 回答中每个数字（年龄、年限、高度等）必须与知识库原文一致
-2. 回答中每个车型名称必须与代码正确对应（B2是大型货车不是中型客车）
-3. 回答中每条增驾路径、准驾车型范围必须与知识库一致
-4. 如果发现编造或错误，修正后输出最终答案
-5. 如果全部正确，输出最终答案（去掉所有[片段X]标记，答案简洁易读）
-
-【绝对正确的法规速查 —— 最高优先级，任何情况下不得违反，即使与片段表面表述冲突】
-- D（普通三轮摩托车）、E（普通二轮摩托车）、F（轻便摩托车）既可初次申领也可增驾，不属于"只能通过增驾获得"的车型
-- 已持任何准驾车型驾驶证（含B2大型货车、C1小型汽车等）均可直接申请增驾D/E/F摩托车，没有持证年限要求
-- 增驾摩托车唯一条件：本记分周期和申请前最近1个记分周期内无记满12分记录
-- 严禁输出"B2/C1不能增驾摩托车"或"B2不允许直接增驾摩托车"——这是错误结论，必须纠正为"可以增驾"
-- 辨色力（第十四条身体条件第3项）：原文仅"辨色力：无红绿色盲"，无车型限定，对A1至P全部准驾车型一律适用。严禁输出"部分车型不要求辨色力""色盲可以申请C1/C2"——红绿色盲者不能申请任何准驾车型的驾驶证
-- A1、A2、B1、C6 不得初次申领，只能增驾取得
-
-输出要求：只输出修正后的最终答案正文，不要输出核查过程、不要出现"待验证回答""最终答案"等字样、不要评价原回答对错。
-
-=== 知识库内容 ===
-{context}
-=== 知识库内容结束 ===
-
-用户问题：{user_question}
-
-待验证回答：
-{draft_answer}
-
-请输出验证后的最终答案："""
-
-        try:
-            verified_answer = self._call_llm(verify_prompt, "请核实并输出最终答案", max_tokens=1500)
-        except Exception as e:
-            print(f"[RAGEngine] 验证阶段出错: {e}, 回退到草稿答案")
-            verified_answer = draft_answer  # 验证失败则回退到草稿
-
-        # 清理重复的"最终答案："标记（验证环节偶发把草稿与定稿一起输出）
+        # 清理重复的"最终答案："标记（历史上验证环节会带出，保留以防模型自发生成）
         verified_answer = re.sub(r'\n+\s*最终答案\s*[:：]\s*', '\n\n', verified_answer)
-        # 去掉重复/复述段落（验证环节把同一内容换种说法再说一遍）
+        # 去掉重复/复述段落（模型偶发把结论换个说法再说一遍）
         verified_answer = self._dedupe_paragraphs(verified_answer)
 
-        # 如果验证通过，去掉"【验证通过】"前缀
+        # 如果模型自发生成"【验证通过】"前缀，去掉
         if verified_answer.startswith("【验证通过】"):
             verified_answer = verified_answer.replace("【验证通过】", "", 1).strip()
 
@@ -278,6 +329,77 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
             "sources": filtered
         }
 
+
+    def _fallback_from_context(self, filtered: List[Dict], reason: str = "") -> Dict:
+        """生成侧失败/超时的兜底：直接返回检索到的法规原文。
+
+        为什么不是返回「请稍后重试」：用户已经等了 10 秒，再给一句「重试」等于白等。
+        检索结果本身（法条原文）就有信息量，标明「未经 AI 整理」即可交付。
+        这是机制化兜底——不论 LLM 侧超时、限流还是报错，用户都能拿到东西，
+        且响应时间被 deadline 锁死在预算内，不会击穿云托管 15s 上限。
+        """
+        heads = {
+            "budget": "检索已完成，AI 整理超时。以下是为你在法规库中找到的原文：",
+            "llm_error": "AI 整理暂时不可用。以下是为你在法规库中找到的原文：",
+        }
+        parts = [f"**{heads.get(reason, '以下是为你在法规库中找到的法规原文：')}**"]
+        # 取 3 条而不是 2 条：混合检索的排序在长尾问题上并不总准，
+        # 正确答案常落在第 2~3 条，只给前 2 条容易把不相关法条推给用户。
+        for r in filtered[:3]:
+            meta = r.get("metadata") or {}
+            title = meta.get("title") or meta.get("source") or "法规原文"
+            text = (r.get("content") or "").strip()
+            if len(text) > 450:
+                cut = max(text.rfind("。", 0, 450), text.rfind("\n", 0, 450))
+                text = (text[:cut + 1] if cut > 250 else text[:450]) + "…"
+            parts.append(f"**{title}**\n{text}")
+        parts.append("> 以上为检索原文，未经 AI 整理。如需完整解答，可把问题问得更具体，或稍后重试。")
+        return {"answer": "\n\n".join(parts), "sources": filtered, "degraded": True}
+
+    def quick_lookup(self, question: str, top_k: int = 3) -> Dict:
+        """只检索、不调 LLM。用于上游超时兜底：用户至少能看到法规原文。
+
+        检索本身是毫秒级（实测 0.04~0.5s），因此上游 12 秒保险触发后，
+        再花几百毫秒补一次检索，总耗时仍在云托管 15 秒上限之内，
+        但用户拿到的是法条原文而不是一句「服务繁忙」。
+        """
+        try:
+            hits = self.vector_store.search(question, top_k=top_k)
+        except Exception as e:
+            print(f"[RAGEngine] 兜底检索失败: {e}")
+            return {}
+        filtered = [r for r in hits if r.get("score", 0) >= 0.05]
+        if not filtered:
+            return {}
+        return self._fallback_from_context(filtered, "budget")
+
+    # 答案中需要核对的法规数字：数值 + 计量单位
+    # 必须带单位才算"法规数字"——裸数字多是序号（"第一百二十三条""第 2 项"），核对它们没有意义
+    _NUM_WITH_UNIT = re.compile(
+        r"(?<![\d\.])(\d+(?:\.\d+)?)\s*"
+        r"(年|个月|月|日|天|个工作日|工作日|分|次|座|周岁|岁|米|厘米|度|%|％|公里|千米|吨|千克)"
+    )
+
+    def _check_numbers(self, answer: str, context: str):
+        """纯代码核对：答案里带单位的法规数字，是否能在检索上下文中找到依据。
+
+        替代原「第二遍 LLM 自我验证」中「数字必须与原文一致」这一条。
+        返回 (未落地数字列表, 数字总数)。
+
+        判定规则刻意宽松（只要上下文中出现过该数值就算有依据），因为片段已被截断，
+        原文数字常在截断之外；宁可漏报也不误报——误报会触发无意义的系统校验提示。
+        """
+        pairs = self._NUM_WITH_UNIT.findall(answer or "")
+        if not pairs:
+            return [], 0
+        ctx = context or ""
+        ungrounded = []
+        for val, unit in pairs:
+            # 宽松匹配：只认数值本身是否在上下文中出现过
+            if re.search(r"(?<![\d\.])" + re.escape(val) + r"(?![\d\.])", ctx):
+                continue
+            ungrounded.append(f"{val}{unit}")
+        return ungrounded, len(pairs)
 
     @staticmethod
     def _dedupe_paragraphs(text: str) -> str:
@@ -525,8 +647,21 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
 
 
 def create_rag_engine(persist_dir: str, api_base: str, api_key: str, model: str, embed_backend: str = "local"):
-    """创建 RAGEngine 实例辅助函数"""
+    """创建 RAGEngine 实例辅助函数。"""
     vector_store = VectorStore(persist_dir, api_key=api_key, api_base=api_base, embed_backend=embed_backend)
     print(f"[create_rag_engine] 向量库加载完成，文档数: {vector_store.count()}")
+
+    # ── 启动预热 ──
+    # BM25 倒排索引与嵌入模型都是「首次检索时构建」的懒加载结构。若不预热，
+    # 云托管上一个真实用户的第一个请求要额外承担 2~5 秒构建开销，而这笔开销
+    # 直接算在他那份 15 秒预算里。启动时付掉这笔账，用户侧就只剩纯检索耗时。
+    t0 = time.time()
+    try:
+        vector_store._build_bm25_index()
+        vector_store.search("驾驶证", top_k=1)  # 触发嵌入前向，把模型彻底唤醒
+        print(f"[create_rag_engine] 启动预热完成，耗时 {time.time() - t0:.2f}s")
+    except Exception as e:
+        print(f"[create_rag_engine] 预热失败（忽略，首次请求会自动重试）: {e}")
+
     engine = RAGEngine(vector_store, api_base, api_key, model)
     return engine

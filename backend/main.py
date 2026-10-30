@@ -172,9 +172,14 @@ def to_blocks(markdown_text: str):
     return blocks
 
 
-# 单实例线程池：把"检索+生成"放进线程里跑，主线程只负责计时，
-# 这样才能在 12 秒时准时返回降级答案（15 秒是云托管调用链的硬上限）。
-_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="rag")
+# 查询线程池：把"检索+生成"放进线程里跑，主线程只负责计时，
+# 这样才能在 QUERY_TIMEOUT 时准时返回降级答案（15 秒是云托管调用链的硬上限）。
+#
+# ⚠️ worker 数必须 ≥ 预期并发：原先只有 2 个，8 个并发请求里 6 个在队列里排队，
+# 而 fut.result(timeout=) 从「提交时刻」起算、排队时间被计入，导致这些请求还没
+# 开始执行就被判定超时，直接落到兜底文案。整个链路是「等 LLM 网络 I/O」的
+# 阻塞型任务，不占 CPU，8~16 个 worker 不会压垮 0.5 核容器。
+_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=12, thread_name_prefix="rag")
 
 
 # ============ API 接口 ============
@@ -231,9 +236,28 @@ def query(request: QueryRequest, http_request: Request):
         fut = _EXECUTOR.submit(rag_engine.query, q)
         result = fut.result(timeout=QUERY_TIMEOUT)
     except concurrent.futures.TimeoutError:
-        # 主动降级：云托管链路 15s 硬超时，走到那里前端只会看到"请求失败"
-        msg = ("这个问题检索和整理用的时间超出预期了。建议把问题拆短一点再问，"
-               "比如只问「检验周期」或只问「记几分」，答案会更准也更快。")
+        # 最后一道保险：正常情况下 RAGEngine 自己会在 10 秒预算内降级返回检索原文，
+        # 走到这里说明排队或检索本身已超预算（并发高峰）。
+        # 不再直接吐一句「服务繁忙」，而是补一次纯检索（毫秒级），把法条原文交给用户。
+        fallback = {}
+        try:
+            fallback = rag_engine.quick_lookup(q, top_k=3) if rag_engine else {}
+        except Exception as e:
+            print(f"[query] 兜底检索失败: {e}")
+
+        if fallback.get("answer"):
+            return JSONResponse({
+                "success": True,
+                "answer": fallback["answer"],
+                "blocks": to_blocks(fallback["answer"]),
+                "fact_hit": None,
+                "sources": [_norm_source(s) for s in fallback.get("sources", [])],
+                "degraded": "timeout_search"
+            })
+
+        msg = ("抱歉，这次检索整理没能在 10 秒内完成（服务当前响应较慢）。"
+               "请稍等几秒再试一次；把问题问得更具体（例如只问「检验周期」或「记几分」）"
+               "通常返回得更快。")
         return JSONResponse({
             "success": True,
             "answer": msg,
