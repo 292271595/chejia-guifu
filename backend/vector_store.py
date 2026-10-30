@@ -187,6 +187,36 @@ def _keyword_score(query: str, document: str) -> float:
     return 0.8 * precision + 0.2 * recall
 
 
+# ============================================================
+# 查询扩展：口语 → 法条术语
+# ============================================================
+# 典型失败："醉驾后多久可以继续考驾驶证"。
+# 这句话里没有"吊销""不得重新取得""禁驾"任何一个法律术语，
+# 向量和 BM25 都会退回去匹配字面相近的"学习驾驶证明有效期3年"
+# "注销未超过2年恢复驾驶资格"，真正的第十五条反而进不了 top-8，
+# 于是模型拿着"2年恢复"的片段编出了一个"吊销→注销→2年恢复"的答案。
+# 做法：只对高区分度的处罚类口语补上法条术语，不改写原句（原句仍参与打分）。
+_QUERY_EXPANSION = [
+    (re.compile(r"(醉驾|醉酒|酒驾|饮酒后驾驶|酒后驾驶)"),
+     "醉酒驾驶机动车 吊销机动车驾驶证 不得重新取得 禁驾"),
+    (re.compile(r"(毒驾|吸毒|注射毒品)"),
+     "吸食注射毒品 不得申请机动车驾驶证 三年内"),
+    (re.compile(r"(肇事逃逸|事故逃逸|逃逸)"),
+     "造成交通事故后逃逸 终生不得重新取得机动车驾驶证"),
+]
+
+
+def expand_query(query: str) -> str:
+    """在口语问句后追加法条术语，提升处罚类问题的召回（幂等，可重复调用）。"""
+    extra = [terms for pat, terms in _QUERY_EXPANSION if pat.search(query)]
+    if not extra:
+        return query
+    tail = " ".join(extra)
+    if tail in query:
+        return query
+    return f"{query} {tail}"
+
+
 class VectorStore:
     """
     ChromaDB 封装，支持混合检索：
@@ -324,6 +354,9 @@ class VectorStore:
 
     def search(self, query: str, top_k: int = 5) -> List[Dict]:
         """混合检索：向量语义（0.55）+ BM25 关键词（0.45）"""
+        # Step 0.5: 口语 → 法条术语扩展（见 expand_query 注释）
+        query = expand_query(query)
+
         # Step 1: 向量检索（扩大候选集，避免正确片段被截断）
         vec_results = self._vector_search(query, top_k=max(20, top_k * 3))
         vec_map = {d["id"]: d for d in vec_results}

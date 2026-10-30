@@ -67,7 +67,10 @@ _REVOKE_TABLE_TEXT = """| 情形 | 禁止申请期限 | 依据 |
 REVOKE_RULES: List[Dict] = [
     dict(need=["逃逸"], any_=["犯罪"], forever=True,
          desc="造成交通事故后逃逸构成犯罪的", law="第十五条第三项"),
-    dict(need=["重大交通事故", "重大事故"], any_=["饮酒", "醉酒"], forever=True,
+    # 酒驾/醉驾 + 死亡：口语说"撞死人"时不会出现"重大事故"字样，
+    # 若只按法条措辞匹配，会被下面的"醉酒→5年"规则抢答成 5 年（少答成终生禁驾）。
+    dict(need=["重大交通事故", "重大事故", "死亡", "撞死", "致死"],
+         any_=["饮酒", "醉酒"], forever=True,
          desc="饮酒后或者醉酒驾驶机动车发生重大交通事故构成犯罪的", law="第十五条第四项"),
     dict(need=["醉酒"], any_=["营运"], years=10,
          desc="醉酒驾驶营运机动车依法被吊销机动车驾驶证的", law="第十五条第六项"),
@@ -544,6 +547,16 @@ def q_first_apply(question: str) -> Optional[Dict]:
 
 
 def q_revoke(question: str) -> Optional[Dict]:
+    """吊销/禁驾后的重新申领期限。
+
+    与「注销后恢复驾驶资格」是两套制度，答案里必须显式排除后者，
+    否则用户会把"5 年禁驾后重新报考"误解成"2 年内考科目一就能恢复"。
+    """
+    # 自证相关性：调度表的主题正则只做粗筛，这里再按同一口径确认一次，
+    # 避免"科目二考完多久考科目三"这类问句被误接。
+    if not revoke_topic_ok(question):
+        return None
+
     q = norm(question)
     for rule in REVOKE_RULES:
         if not has(q, rule["need"]):
@@ -553,12 +566,18 @@ def q_revoke(question: str) -> Optional[Dict]:
         if rule.get("forever"):
             text = (f"**终生不得重新取得机动车驾驶证（终生禁驾）。**\n\n"
                     f"情形：{rule['desc']}。\n\n"
-                    f"依据：《机动车驾驶证申领和使用规定》{rule['law']}。")
+                    f"依据：《机动车驾驶证申领和使用规定》{rule['law']}。\n\n"
+                    "终生禁驾没有期满后重新申领的通道。")
         else:
             text = (f"**{rule['years']} 年内不得申请机动车驾驶证。**\n\n"
                     f"情形：{rule['desc']}。\n\n"
                     f"依据：《机动车驾驶证申领和使用规定》{rule['law']}。\n\n"
-                    "期满后可按初次申领程序重新申请。")
+                    "禁驾期满后按**初次申领**程序重新报考，须重新参加科目一至科目四全部考试，"
+                    "取得的是新驾驶证。")
+            if rule["need"] == ["醉酒"] and not rule.get("any_"):
+                text += ("\n\n对照：**醉酒驾驶营运机动车**为 **10 年**；"
+                         "**饮酒后或者醉酒驾驶发生重大交通事故构成犯罪**的为**终生禁驾**。")
+        text += "\n\n" + RECOVER["disambig"]
         return result(text,
                       [source(f"《机动车驾驶证申领和使用规定》{rule['law']}", rule["desc"])],
                       f"REVOKE:{rule['years'] if not rule.get('forever') else 'FOREVER'}")
@@ -567,6 +586,8 @@ def q_revoke(question: str) -> Optional[Dict]:
         return result(
             "吊销后重新申请的期限**取决于吊销原因，不能统一回答\"2年\"**：\n\n"
             + _REVOKE_TABLE_TEXT +
+            "\n\n期满后按**初次申领**程序重新报考全部科目，不存在「考科目一恢复驾驶资格」的通道。\n\n"
+            + RECOVER["disambig"] +
             "\n\n请补充具体的违法情形，我可以给出准确期限。",
             [source("《机动车驾驶证申领和使用规定》第十五条",
                     "醉酒驾驶机动车或者饮酒后驾驶营运机动车依法被吊销机动车驾驶证未满5年的……")],
@@ -760,13 +781,15 @@ _HANDLERS = [
     (ext.q_period, r"记分周期", {"DURATION", "DEFINE"}),
     # ── 5. 记满 12 分处理 ──
     (ext.q_full_score, r"(?:记满|满)\s*12\s*分", {"PROCEDURE", "SUBJECT", "PENALTY"}),
-    # ── 6. 记分（含醉驾/学法减分/超员超载超速矩阵）──
+    # ── 6. 吊销后重考期限（口语"继续考/还能考/什么时候能考"也必须接住）──
+    # 必须早于记分处理器：醉驾致死/逃逸致罪这类问句若被记分模板抢答，
+    # 会把"终生禁驾"答成"5年内不得重新取得"。
+    (q_revoke, REVOKE_TOPIC,
+     {"DURATION", "QUALIFY"}),
+    # ── 7. 记分（含醉驾/学法减分/超员超载超速矩阵）──
     (fact_score.q_score,
      r"(?:记|扣)\s*几?\s*分|几分|多少分|记分|扣分|超速|超员|超载|超重|超限|学法减分|醉.{0,2}驾|饮酒",
      SCORE_COV | QUALIFY),
-    # ── 7. 吊销后重考期限 ──
-    (q_revoke, r"(吊销|撤销|终身禁驾|终生禁驾|重新取得|重新申请|不得申请|不能申请|重考|禁驾)",
-     {"DURATION", "QUALIFY"}),
     # ── 8. 身体条件（色盲/色弱/视力/身高/听力/肢体）──
     (q_physical,
      r"(色盲|色弱|辨色|视力|裸视|眼睛|单眼|身高|听力|耳聋|助听|上肢|下肢|手指|手掌|拇指|肢体|残疾|截肢)",

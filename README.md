@@ -89,3 +89,25 @@ python -m uvicorn main:app --host 0.0.0.0 --port 8000
 3. **完全免费可运行**: ChromaDB免费 + 本地Embedding免费 + DeepSeek免费API
 4. **易于迁移**: 替换知识库Markdown文档即可用于任何垂直领域
 5. **轻量部署**: 单机运行，无需GPU，适合个人/小团队
+## 问答准确性：四层防线
+
+线上真实出现过一类硬错误：问「醉驾后多久可以继续考驾驶证」，系统答成
+「吊销后注销未超过2年、考科目一即可恢复驾驶资格」——把 **吊销**（违法后的惩罚，5年禁驾、期满重新报考全部科目）
+和 **注销**（超期未换证的行政管理性注销，2年内考科目一恢复）缝成了一句话。
+
+修复采用了分层兜底，任何一层单独失效都不会漏到用户侧：
+
+| 层 | 位置 | 作用 |
+|---|---|---|
+| 1. 事实层路由 | `backend/fact_table.py` `REVOKE_TOPIC` + `revoke_topic_ok()` | 接住口语问法（继续考/还能考/什么时候能考/重新拿证/撞死人），命中即查表直答，不经模型 |
+| 2. 检索扩展 | `backend/vector_store.py` `expand_query()` | 口语 → 法条术语（醉驾→吊销/不得重新取得/禁驾），把第十五条拉回 top-8 |
+| 3. 生成约束 | `backend/rag_engine.py` 系统提示词【吊销 ≠ 注销】 | 明确"2年恢复"只适用于换证注销，禁止移植到吊销 |
+| 4. 确定性护栏 | `backend/rag_engine.py` `_guard_revoke_restore_confusion()` | 检测答案里的制度缝合痕迹，按第十五条整体校正 |
+
+回归测试（离线，秒级，不花 token）：
+
+```bash
+python tools/eval_fact200.py              # 200 题事实层评测
+python tools/eval_retrieval.py            # 检索 top-8 命中率
+python tools/test_penalty_regression.py   # 吊销/注销专项：口语改写 19 例 + 护栏 5 例
+```
