@@ -6,12 +6,12 @@
  *  任一为空    → 自动退回 wx.request 直连 BASE_URL（仅本地开发者工具调试用，
  *               需在开发者工具「详情 - 本地设置」勾选“不校验合法域名”）。
  */
-const CLOUD_ENV = '';            // 例：'prod-3gxxxxxx'，云托管环境 ID
-const SERVICE_NAME = '';         // 例：'rag-backend'，云托管服务名
+const CLOUD_ENV = 'prod-d9gclmh4i4080ad81';   // 云托管环境 ID（2026-10-30 创建）
+const SERVICE_NAME = 'rag-backend';           // 云托管服务名，必须与控制台完全一致
 const BASE_URL = 'http://127.0.0.1:8000';   // 仅本地调试生效
 
 module.exports = {
-  appName: '车驾规速查',
+  appName: '车驾规问答',
   version: '0.1.0',
   feedbackEmail: '',
 

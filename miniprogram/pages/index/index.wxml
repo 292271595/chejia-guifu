@@ -13,7 +13,7 @@
       <view class="hero-logo">
         <image class="hero-img" src="/assets/avatar-144.png" mode="aspectFill" />
       </view>
-      <view class="hero-title">车驾规速查</view>
+      <view class="hero-title">车驾规问答</view>
       <view class="hero-sub">驾照申领 · 增驾 · 记分 · 年检 · 换证 · 车辆登记</view>
       <view class="hero-note">依据法规原文整理，非官方应用</view>
     </view>

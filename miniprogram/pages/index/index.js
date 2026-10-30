@@ -122,6 +122,6 @@ Page({
   },
 
   onShareAppMessage() {
-    return { title: '车驾规速查 · 驾照年检记分查得清', path: '/pages/index/index' };
+    return { title: '车驾规问答 · 驾照年检记分查得清', path: '/pages/index/index' };
   }
 });
