@@ -1,0 +1,407 @@
+.page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #F4F6F8;
+}
+
+/* ============ 聊天区 ============ */
+.chat {
+  flex: 1;
+  height: 0;
+}
+
+.chat-body {
+  padding: 0 28rpx 24rpx;
+}
+
+/* 空态 */
+.hero {
+  padding: 80rpx 40rpx 8rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.hero-logo {
+  margin-bottom: 28rpx;
+}
+
+.hero-img {
+  width: 128rpx;
+  height: 128rpx;
+  border-radius: 30rpx;
+  box-shadow: 0 8rpx 24rpx rgba(26, 75, 124, 0.18);
+}
+
+.hero-title {
+  font-size: 40rpx;
+  font-weight: 600;
+  color: #123A5F;
+  letter-spacing: 1rpx;
+}
+
+.hero-sub {
+  margin-top: 12rpx;
+  font-size: 25rpx;
+  color: #7C8797;
+}
+
+.hero-note {
+  margin-top: 18rpx;
+  font-size: 22rpx;
+  color: #A0A9B6;
+  padding: 6rpx 18rpx;
+  border: 1rpx solid #DCE4EC;
+  border-radius: 20rpx;
+}
+
+/* ============ 消息行 ============ */
+.row {
+  display: flex;
+  margin-top: 28rpx;
+}
+
+.row-user {
+  justify-content: flex-end;
+}
+
+.bubble-user {
+  max-width: 78%;
+  background: #1A4B7C;
+  color: #FFFFFF;
+  font-size: 30rpx;
+  line-height: 1.6;
+  padding: 20rpx 26rpx;
+  border-radius: 22rpx 22rpx 6rpx 22rpx;
+}
+
+.row-ai {
+  justify-content: flex-start;
+}
+
+.ai-card {
+  width: 100%;
+  background: #FFFFFF;
+  border-radius: 22rpx 22rpx 22rpx 6rpx;
+  padding: 26rpx 26rpx 18rpx;
+  box-shadow: 0 4rpx 16rpx rgba(26, 75, 124, 0.07);
+}
+
+/* 思考中 */
+.thinking {
+  display: flex;
+  align-items: center;
+  padding: 6rpx 0;
+}
+
+.dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #1A4B7C;
+  margin-right: 10rpx;
+  opacity: 0.35;
+  animation: blink 1.2s infinite;
+}
+
+.dot-2 {
+  animation-delay: 0.2s;
+}
+
+.dot-3 {
+  animation-delay: 0.4s;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-4rpx); }
+}
+
+.thinking-text {
+  margin-left: 8rpx;
+  font-size: 26rpx;
+  color: #8A94A6;
+}
+
+/* 出错 */
+.err {
+  padding: 8rpx 0;
+  font-size: 28rpx;
+  color: #C0392B;
+  line-height: 1.7;
+}
+
+/* ============ 内容块 ============ */
+.blk-h {
+  display: block;
+  font-size: 31rpx;
+  font-weight: 600;
+  color: #123A5F;
+  margin: 22rpx 0 6rpx;
+}
+
+.blk-h:first-child {
+  margin-top: 0;
+}
+
+.blk-p {
+  display: block;
+  font-size: 30rpx;
+  line-height: 1.8;
+  color: #1F2937;
+  margin: 10rpx 0;
+}
+
+.blk-list {
+  margin: 8rpx 0;
+}
+
+.li {
+  display: flex;
+  margin: 8rpx 0;
+}
+
+.li-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  background: #F0A33C;
+  margin: 18rpx 16rpx 0 4rpx;
+  flex: none;
+}
+
+.li-text {
+  flex: 1;
+  font-size: 30rpx;
+  line-height: 1.8;
+  color: #1F2937;
+}
+
+.blk-table {
+  margin: 16rpx 0;
+  border: 1rpx solid #E6EDF4;
+  border-radius: 12rpx;
+  overflow: hidden;
+}
+
+.tbl-scroll {
+  width: 100%;
+}
+
+.tbl {
+  display: inline-block;
+  min-width: 100%;
+}
+
+.tbl-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1rpx solid #EDF1F5;
+}
+
+.tbl-row:last-child {
+  border-bottom: none;
+}
+
+.tbl-head {
+  background: #EEF3F8;
+}
+
+.tbl-cell {
+  min-width: 150rpx;
+  padding: 14rpx 18rpx;
+  font-size: 26rpx;
+  line-height: 1.6;
+  color: #1F2937;
+  flex: 1;
+}
+
+.tbl-head .tbl-cell {
+  font-weight: 600;
+  color: #123A5F;
+}
+
+.blk-quote {
+  margin: 16rpx 0 4rpx;
+  padding: 16rpx 20rpx;
+  background: #FDF6EC;
+  border-left: 6rpx solid #F0A33C;
+  border-radius: 8rpx;
+  font-size: 25rpx;
+  line-height: 1.7;
+  color: #7A5A2E;
+}
+
+/* 降级提示 */
+.degraded {
+  margin-top: 14rpx;
+  padding: 12rpx 16rpx;
+  background: #FFF7E8;
+  border-radius: 10rpx;
+  font-size: 24rpx;
+  color: #94651A;
+}
+
+/* ============ 来源 ============ */
+.src {
+  margin-top: 20rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx dashed #E3EAF2;
+}
+
+.src-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.src-count {
+  font-size: 25rpx;
+  color: #6B7A8D;
+}
+
+.src-arrow {
+  font-size: 25rpx;
+  color: #1A4B7C;
+}
+
+.src-list {
+  margin-top: 12rpx;
+}
+
+.src-item {
+  display: flex;
+  margin: 10rpx 0;
+}
+
+.src-bar {
+  width: 6rpx;
+  border-radius: 3rpx;
+  background: #C7D8E8;
+  margin-right: 14rpx;
+  flex: none;
+}
+
+.src-title {
+  flex: 1;
+  font-size: 25rpx;
+  line-height: 1.6;
+  color: #55627A;
+}
+
+/* ============ AI 脚注 ============ */
+.ai-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16rpx;
+  padding-top: 14rpx;
+  border-top: 1rpx solid #F0F3F7;
+}
+
+.ai-tag {
+  font-size: 21rpx;
+  color: #9AA4B2;
+  padding: 3rpx 12rpx;
+  border: 1rpx solid #E4EAF1;
+  border-radius: 8rpx;
+}
+
+.ai-actions {
+  display: flex;
+}
+
+.act {
+  font-size: 25rpx;
+  color: #1A4B7C;
+  padding: 6rpx 16rpx;
+  margin-left: 8rpx;
+}
+
+/* ============ 示例问题 ============ */
+.quick {
+  margin-top: 48rpx;
+}
+
+.quick-title {
+  font-size: 25rpx;
+  color: #8A94A6;
+  margin-bottom: 18rpx;
+  padding-left: 6rpx;
+}
+
+.quick-wrap {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.chip {
+  background: #FFFFFF;
+  border: 1rpx solid #E2EAF2;
+  border-radius: 30rpx;
+  padding: 14rpx 24rpx;
+  margin: 0 16rpx 16rpx 0;
+  font-size: 26rpx;
+  color: #2E4A66;
+}
+
+.chat-tail {
+  height: 1rpx;
+}
+
+/* ============ 输入区 ============ */
+.composer {
+  flex: none;
+  background: #FFFFFF;
+  border-top: 1rpx solid #EAEFF5;
+  padding-bottom: constant(safe-area-inset-bottom);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.composer-row {
+  display: flex;
+  align-items: flex-end;
+  padding: 16rpx 24rpx 6rpx;
+}
+
+.input {
+  flex: 1;
+  min-height: 76rpx;
+  max-height: 200rpx;
+  background: #F2F5F8;
+  border-radius: 16rpx;
+  padding: 20rpx 22rpx;
+  font-size: 29rpx;
+  line-height: 1.5;
+  color: #1F2937;
+}
+
+.ph {
+  color: #A8B2C0;
+}
+
+.send {
+  width: 128rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  text-align: center;
+  background: #1A4B7C;
+  color: #FFFFFF;
+  border-radius: 16rpx;
+  margin-left: 16rpx;
+  font-size: 29rpx;
+  flex: none;
+}
+
+.send-off {
+  background: #C7D2DE;
+}
+
+.composer-tip {
+  padding: 4rpx 28rpx 10rpx;
+  text-align: center;
+  font-size: 21rpx;
+  line-height: 1.5;
+  color: #A2ACBA;
+}

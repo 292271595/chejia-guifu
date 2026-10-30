@@ -1,0 +1,5 @@
+START Thu Oct 29 10:13:33     2026
+Loading weights:   0%|          | 0/71 [00:00<?, ?it/s]Loading weights: 100%|██████████| 71/71 [00:00<00:00, 4297.07it/s]
+<string>:4: FutureWarning: The `get_sentence_embedding_dimension` method has been renamed to `get_embedding_dimension`.
+SMALL_MODEL_OK 512
+DONE Thu Oct 29 10:15:58     2026

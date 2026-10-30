@@ -1,0 +1,114 @@
+.about {
+  padding: 40rpx 28rpx 60rpx;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20rpx 0 40rpx;
+}
+
+.logo {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 28rpx;
+  box-shadow: 0 8rpx 24rpx rgba(26, 75, 124, 0.16);
+}
+
+.name {
+  margin-top: 20rpx;
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #123A5F;
+}
+
+.ver {
+  margin-top: 8rpx;
+  font-size: 23rpx;
+  color: #98A2B1;
+}
+
+.card {
+  background: #FFFFFF;
+  border-radius: 20rpx;
+  padding: 26rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 16rpx rgba(26, 75, 124, 0.06);
+}
+
+.card-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #123A5F;
+  margin-bottom: 14rpx;
+  padding-left: 16rpx;
+  border-left: 6rpx solid #F0A33C;
+  line-height: 1.2;
+}
+
+.card-body {
+  font-size: 27rpx;
+  line-height: 1.85;
+  color: #43505F;
+  margin-top: 10rpx;
+}
+
+.em {
+  color: #123A5F;
+  font-weight: 600;
+}
+
+.src-list {
+  margin-top: 6rpx;
+}
+
+.src-row {
+  display: flex;
+  margin: 12rpx 0;
+}
+
+.src-dot {
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 50%;
+  background: #C7D8E8;
+  margin: 16rpx 14rpx 0 4rpx;
+  flex: none;
+}
+
+.src-text {
+  flex: 1;
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: #43505F;
+}
+
+.mail {
+  margin-top: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #F3F7FB;
+  border-radius: 12rpx;
+  padding: 18rpx 22rpx;
+  font-size: 27rpx;
+  color: #1A4B7C;
+}
+
+.copy {
+  font-size: 23rpx;
+  color: #8A94A6;
+}
+
+.muted {
+  color: #98A2B1;
+}
+
+.foot {
+  text-align: center;
+  font-size: 22rpx;
+  color: #A8B2C0;
+  line-height: 1.7;
+  margin-top: 20rpx;
+}

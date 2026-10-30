@@ -1,0 +1,158 @@
+<view class="page">
+
+  <scroll-view
+    class="chat"
+    scroll-y
+    scroll-into-view="{{scrollTo}}"
+    scroll-with-animation
+    enhanced
+    show-scrollbar="{{false}}"
+  >
+    <!-- 空态：品牌 + 免责 + 示例问题 -->
+    <view class="hero" wx:if="{{messages.length === 0}}">
+      <view class="hero-logo">
+        <image class="hero-img" src="/assets/avatar-144.png" mode="aspectFill" />
+      </view>
+      <view class="hero-title">车驾规速查</view>
+      <view class="hero-sub">驾照申领 · 增驾 · 记分 · 年检 · 换证 · 车辆登记</view>
+      <view class="hero-note">依据法规原文整理，非官方应用</view>
+    </view>
+
+    <view class="chat-body">
+
+      <!-- 消息流 -->
+      <block wx:for="{{messages}}" wx:key="id">
+
+        <!-- 用户 -->
+        <view class="row row-user" wx:if="{{item.role === 'user'}}">
+          <view class="bubble-user">
+            <text>{{item.text}}</text>
+          </view>
+        </view>
+
+        <!-- AI -->
+        <view class="row row-ai" wx:else>
+          <view class="ai-card">
+
+            <!-- 思考中 -->
+            <view class="thinking" wx:if="{{item.loading}}">
+              <view class="dot"></view>
+              <view class="dot dot-2"></view>
+              <view class="dot dot-3"></view>
+              <text class="thinking-text">正在核对法规原文…</text>
+            </view>
+
+            <!-- 出错 -->
+            <view class="err" wx:elif="{{item.error}}">
+              <text>{{item.error}}</text>
+            </view>
+
+            <!-- 正文 -->
+            <block wx:else>
+              <block wx:for="{{item.blocks}}" wx:for-item="b" wx:for-index="bi" wx:key="bi">
+
+                <text class="blk-h" wx:if="{{b.type === 'h'}}">{{b.text}}</text>
+
+                <text class="blk-p" wx:elif="{{b.type === 'p'}}" user-select>{{b.text}}</text>
+
+                <view class="blk-list" wx:elif="{{b.type === 'list'}}">
+                  <view class="li" wx:for="{{b.items}}" wx:for-item="li" wx:key="*this">
+                    <view class="li-dot"></view>
+                    <text class="li-text">{{li}}</text>
+                  </view>
+                </view>
+
+                <view class="blk-table" wx:elif="{{b.type === 'table'}}">
+                  <scroll-view scroll-x class="tbl-scroll">
+                    <view class="tbl">
+                      <view class="tbl-row tbl-head">
+                        <text class="tbl-cell" wx:for="{{b.header}}" wx:for-item="c" wx:key="*this">{{c}}</text>
+                      </view>
+                      <view class="tbl-row" wx:for="{{b.rows}}" wx:for-item="r" wx:key="index">
+                        <text class="tbl-cell" wx:for="{{r}}" wx:for-item="c" wx:key="*this">{{c}}</text>
+                      </view>
+                    </view>
+                  </scroll-view>
+                </view>
+
+                <view class="blk-quote" wx:elif="{{b.type === 'quote'}}">
+                  <text>{{b.text}}</text>
+                </view>
+
+              </block>
+
+              <!-- 降级提示 -->
+              <view class="degraded" wx:if="{{item.degraded}}">
+                <text>回答较慢，已先给出要点。可把问题拆短再问一次。</text>
+              </view>
+
+              <!-- 来源 -->
+              <view class="src" wx:if="{{item.sources.length > 0}}">
+                <view class="src-head" bindtap="toggleSources" data-index="{{index}}">
+                  <text class="src-count">{{item.sources.length}} 条法规来源</text>
+                  <text class="src-arrow">{{item.showSources ? '收起' : '展开'}}</text>
+                </view>
+                <view class="src-list" wx:if="{{item.showSources}}">
+                  <view class="src-item" wx:for="{{item.sources}}" wx:for-item="s" wx:key="index">
+                    <view class="src-bar"></view>
+                    <text class="src-title">{{s.title}}</text>
+                  </view>
+                </view>
+              </view>
+
+              <!-- 底部条：AI 标识 + 操作 -->
+              <view class="ai-foot">
+                <text class="ai-tag">AI 生成</text>
+                <view class="ai-actions">
+                  <text class="act" bindtap="copyAnswer" data-index="{{index}}">复制</text>
+                  <text class="act" bindtap="goAbout">反馈</text>
+                </view>
+              </view>
+            </block>
+
+          </view>
+        </view>
+      </block>
+
+      <!-- 示例问题 -->
+      <view class="quick" wx:if="{{messages.length === 0}}">
+        <view class="quick-title">试试这样问</view>
+        <view class="quick-wrap">
+          <view class="chip" wx:for="{{quickQuestions}}" wx:key="*this" bindtap="onQuick" data-q="{{item}}">
+            <text>{{item}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 滚动锚点：两个交替使用，保证每次都能滚到底 -->
+      <view class="chat-tail" id="tailA"></view>
+      <view class="chat-tail" id="tailB"></view>
+    </view>
+  </scroll-view>
+
+  <!-- 输入区 -->
+  <view class="composer">
+    <view class="composer-row">
+      <textarea
+        class="input"
+        value="{{input}}"
+        placeholder="问一句，例如：货车超载 50% 记几分"
+        placeholder-class="ph"
+        maxlength="120"
+        auto-height
+        cursor-spacing="32"
+        confirm-type="send"
+        bindinput="onInput"
+        bindconfirm="onSend"
+        show-confirm-bar="{{false}}"
+      />
+      <view class="send {{canSend ? '' : 'send-off'}}" bindtap="onSend">
+        <text>{{sending ? '…' : '发送'}}</text>
+      </view>
+    </view>
+    <view class="composer-tip">
+      <text>{{disclaimer}}</text>
+    </view>
+  </view>
+
+</view>

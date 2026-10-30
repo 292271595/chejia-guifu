@@ -1,0 +1,11 @@
+# 版本必须锁死：chromadb 1.x 的本地持久化格式与 0.4/0.5 不兼容。
+# 镜像里的 chroma_db 是用 1.5.9 建的，云端装到别的版本会直接读库失败（启动即崩）。
+chromadb==1.5.9
+fastapi==0.136.3
+uvicorn>=0.22.0
+openai==2.41.1
+python-multipart>=0.0.6
+pydantic>=2.0.0
+python-docx>=0.8.0
+# 本地嵌入（EMBED_BACKEND=local）的真实依赖，之前漏登记，容器里会 ImportError
+sentence-transformers==5.5.1

@@ -1,0 +1,43 @@
+page {
+  background: #F4F6F8;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  color: #1F2937;
+  font-size: 30rpx;
+  line-height: 1.7;
+}
+
+view, text, scroll-view, textarea {
+  box-sizing: border-box;
+}
+
+/* 通用卡片 */
+.card {
+  background: #FFFFFF;
+  border-radius: 20rpx;
+  box-shadow: 0 2rpx 12rpx rgba(26, 75, 124, 0.06);
+}
+
+/* 主色按钮 */
+.btn-primary {
+  background: #1A4B7C;
+  color: #FFFFFF;
+  border-radius: 16rpx;
+  font-size: 30rpx;
+  line-height: 1;
+  padding: 22rpx 0;
+  text-align: center;
+}
+
+.btn-primary.is-disabled {
+  background: #C7D2DE;
+  color: #FFFFFF;
+}
+
+.muted {
+  color: #8A94A6;
+}
+
+.divider {
+  height: 1rpx;
+  background: #EDF1F5;
+}

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>阿里云轻量服务器部署指南 · 车驾管知识库</title>
+<style>
+:root {
+  --bg: #0d1117; --bg2: #161b22; --ink: #e6edf3; --muted: #8b949e;
+  --accent: #58a6ff; --accent2: #3fb950; --rule: #30363d; --radius: 8px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--ink); line-height:1.7; padding:2rem; }
+.wrap { max-width:960px; margin:0 auto; }
+h1 { font-size:2rem; margin-bottom:.25rem; background:linear-gradient(135deg,#58a6ff,#3fb950); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+h2 { font-size:1.4rem; color:var(--accent); margin:2.5rem 0 1rem; padding-bottom:.5rem; border-bottom:1px solid var(--rule); }
+h3 { font-size:1.1rem; margin:1.5rem 0 .5rem; color:var(--accent2); }
+p { margin-bottom:.8rem; color:var(--muted); }
+code { background:var(--bg2); color:var(--accent2); padding:2px 8px; border-radius:4px; font-size:.9em; border:1px solid var(--rule); }
+pre { background:var(--bg2); border:1px solid var(--rule); border-radius:var(--radius); padding:1.2rem; overflow-x:auto; margin:.8rem 0 1.5rem; font-size:.85rem; line-height:1.6; }
+pre code { background:none; border:none; padding:0; color:var(--ink); }
+.step { background:var(--bg2); border:1px solid var(--rule); border-radius:var(--radius); padding:1.5rem; margin:1rem 0; }
+.step-num { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; background:var(--accent); color:#fff; border-radius:50%; font-weight:700; font-size:.8rem; margin-right:.6rem; }
+.step h3 { margin-top:0; display:inline; }
+ul { margin:.5rem 0 1rem 1.5rem; color:var(--muted); }
+li { margin-bottom:.3rem; }
+.note { background:rgba(88,166,255,0.08); border-left:3px solid var(--accent); padding:1rem 1.2rem; margin:1rem 0; border-radius:4px; font-size:.9rem; }
+.note strong { color:var(--accent); }
+.warn { background:rgba(251,191,36,0.08); border-left:3px solid #fbbf24; padding:1rem 1.2rem; margin:1rem 0; border-radius:4px; font-size:.9rem; }
+.warn strong { color:#fbbf24; }
+.checklist { list-style:none; padding:0; margin:1rem 0; }
+.checklist li { padding:.3rem 0; }
+.checklist li::before { content:"☐ "; color:var(--accent); margin-right:.5rem; }
+table { width:100%; border-collapse:collapse; margin:1rem 0; }
+td, th { padding:.6rem 1rem; border-bottom:1px solid var(--rule); text-align:left; }
+th { color:var(--accent); font-size:.85rem; }
+td { color:var(--muted); font-size:.9rem; }
+@media (max-width:640px) {
+  body { padding:1rem; }
+  h1 { font-size:1.5rem; }
+  pre { font-size:.78rem; padding:.8rem; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>阿里云轻量服务器部署指南</h1>
+<p>将车驾管知识库问答系统部署到阿里云轻量应用服务器，任何人均可通过浏览器访问使用。</p>
+
+<h2>部署架构</h2>
+<div class="step">
+<pre style="background:none;border:none;padding:0;text-align:center;color:var(--muted);">
+┌──────────┐    ┌──────────┐    ┌────────────────┐    ┌───────────────┐
+│ 用户浏览器 │───▶│  Nginx   │───▶│  Uvicorn:8000  │───▶│ SiliconFlow   │
+│          │    │  80端口   │    │  FastAPI 应用    │    │ BGE-M3+Qwen3  │
+└──────────┘    └──────────┘    └────────────────┘    └───────────────┘
+                                        │
+                                        ▼
+                                ┌────────────────┐
+                                │   ChromaDB     │
+                                │   31条知识块    │
+                                └────────────────┘
+</pre>
+</div>
+
+<h2>环境要求</h2>
+<table>
+<tr><th>项目</th><th>最低要求</th></tr>
+<tr><td>操作系统</td><td>CentOS 7+ / Ubuntu 20.04+ / Alibaba Cloud Linux</td></tr>
+<tr><td>内存</td><td>1 GB（推荐 2 GB）</td></tr>
+<tr><td>磁盘</td><td>10 GB（Chromadb + 依赖约 3GB）</td></tr>
+<tr><td>Python</td><td>3.10+（推荐 3.12）</td></tr>
+</table>
+
+<h2>第一步：服务器基础配置</h2>
+
+<div class="step">
+<h3><span class="step-num">1</span> 连接服务器</h3>
+<p>在阿里云控制台找到轻量服务器 → 远程连接，或本地 SSH 连接：</p>
+<pre><code>ssh root@你的服务器公网IP</code></pre>
+</div>
+
+<div class="step">
+<h3><span class="step-num">2</span> 安装 Python 3.12</h3>
+<pre><code># Ubuntu/Debian
+sudo apt update && sudo apt install -y python3.12 python3.12-venv python3-pip
+
+# CentOS / Alibaba Cloud Linux
+sudo yum install -y python3 python3-pip</code></pre>
+<p>验证安装：<code>python3 --version</code></p>
+</div>
+
+<div class="step">
+<h3><span class="step-num">3</span> 安装 Nginx</h3>
+<pre><code># Ubuntu
+sudo apt install -y nginx
+
+# CentOS
+sudo yum install -y nginx
+
+# 启动并设置开机自启
+sudo systemctl enable nginx
+sudo systemctl start nginx</code></pre>
+</div>
+
+<div class="note">
+<strong>验证：</strong>在浏览器访问 <code>http://你的服务器IP</code>，看到 Nginx 欢迎页即成功。
+</div>
+
+<h2>第二步：上传项目</h2>
+
+<div class="step">
+<h3><span class="step-num">4</span> 上传项目文件</h3>
+<p>在<strong>你本地电脑</strong>上，将项目文件夹打包上传：</p>
+<pre><code># 本地 Windows PowerShell
+cd C:\RAG
+Compress-Archive -Path .\rag-vehicle-system\* -DestinationPath .\rag-vehicle-system.zip
+
+# 上传到服务器（需要 scp 或通过阿里云控制台文件管理上传）
+scp .\rag-vehicle-system.zip root@你的IP:/root/</code></pre>
+<p>然后在<strong>服务器</strong>上解压：</p>
+<pre><code>mkdir -p /opt/
+unzip /root/rag-vehicle-system.zip -d /opt/rag-vehicle-system/
+cd /opt/rag-vehicle-system/</code></pre>
+</div>
+
+<div class="note">
+<strong>备选方案：</strong>也可以直接用 <code>git</code> 从你的代码仓库拉取，如果你将项目上传到了 GitHub/Gitee。
+</div>
+
+<h2>第三步：部署服务</h2>
+
+<div class="step">
+<h3><span class="step-num">5</span> 安装 Python 依赖</h3>
+<pre><code>cd /opt/rag-vehicle-system/
+pip3 install -r requirements.txt</code></pre>
+<p>requirements.txt 内容：</p>
+<pre><code>chromadb
+fastapi
+uvicorn
+openai
+pydantic
+python-multipart
+python-docx</code></pre>
+</div>
+
+<div class="step">
+<h3><span class="step-num">6</span> 构建知识库</h3>
+<pre><code>export API_KEY="YOUR_API_KEY"
+python3 build_kb.py</code></pre>
+<p>看到 <code>知识库构建完成，共 31 条</code> 即成功。</p>
+</div>
+
+<div class="step">
+<h3><span class="step-num">7</span> 创建 systemd 服务</h3>
+<p>让服务在后台永久运行，开机自启：</p>
+<pre><code>sudo tee /etc/systemd/system/vehicle-qa.service &lt;&lt; 'EOF'
+[Unit]
+Description=Vehicle QA RAG Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/rag-vehicle-system/backend
+Environment="API_KEY=YOUR_API_KEY"
+Environment="API_BASE=https://api.siliconflow.cn/v1"
+Environment="MODEL=Qwen/Qwen3-8B"
+ExecStart=python3 -m uvicorn main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable vehicle-qa
+sudo systemctl start vehicle-qa</code></pre>
+
+<p>验证服务启动：</p>
+<pre><code>sudo systemctl status vehicle-qa
+curl http://127.0.0.1:8000/api/status</code></pre>
+</div>
+
+<div class="step">
+<h3><span class="step-num">8</span> 配置 Nginx 反向代理</h3>
+<pre><code>sudo tee /etc/nginx/conf.d/vehicle-qa.conf &lt;&lt; 'EOF'
+server {
+    listen 80;
+    server_name _;  # 或者你的域名，如 qa.example.com
+
+    client_max_body_size 10M;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+EOF
+
+# 测试配置并重载
+sudo nginx -t
+sudo systemctl reload nginx</code></pre>
+</div>
+
+<h2>第四步：开放端口</h2>
+
+<div class="step">
+<h3><span class="step-num">9</span> 配置阿里云安全组（防火墙）</h3>
+<p>在<strong>阿里云控制台</strong>中操作：</p>
+<ol style="color:var(--muted); margin-left:1.5rem; line-height:2;">
+  <li>进入<strong>轻量应用服务器</strong> → 你的服务器</li>
+  <li>左侧菜单 → <strong>防火墙</strong></li>
+  <li>点击<strong>添加规则</strong>：</li>
+</ol>
+<table>
+<tr><th>应用类型</th><th>协议</th><th>端口</th><th>来源</th></tr>
+<tr><td>HTTP</td><td>TCP</td><td>80</td><td>0.0.0.0/0</td></tr>
+</table>
+<div class="note">
+<strong>重要：</strong>不要开放 8000 端口！所有流量通过 Nginx 的 80 端口转发即可。如果你配置了 HTTPS，还需开放 443 端口。
+</div>
+</div>
+
+<div class="step">
+<h3><span class="step-num">10</span> 系统防火墙确认</h3>
+<pre><code># Ubuntu (ufw)
+sudo ufw allow 80/tcp
+
+# CentOS (firewalld)
+sudo firewall-cmd --add-port=80/tcp --permanent
+sudo firewall-cmd --reload</code></pre>
+</div>
+
+<h2>第五步：访问测试</h2>
+
+<div class="checklist">
+  <li>浏览器打开 <code>http://你的服务器公网IP</code></li>
+  <li>看到深色科技风界面，状态栏显示"系统就绪 · 31条知识"</li>
+  <li>输入测试问题："酒驾怎么处罚？"，应返回完整答案</li>
+  <li>手机浏览器同样可以访问，界面自适应</li>
+</div>
+
+<h2>其他人如何使用</h2>
+<div class="step">
+<h3>方式一：直接访问 IP</h3>
+<p>将服务器公网 IP 分享给对方，浏览器打开即可：</p>
+<pre><code>http://123.123.123.123</code></pre>
+<p>无需安装任何软件，任何设备（电脑、平板、手机）都能用。</p>
+</div>
+
+<div class="step">
+<h3>方式二：绑定域名（推荐）</h3>
+<p>如果你有域名（如 <code>qa.yourcompany.com</code>）：</p>
+<ol style="color:var(--muted); margin-left:1.5rem;">
+  <li>在域名 DNS 解析中添加 A 记录，指向服务器公网 IP</li>
+  <li>修改 Nginx 配置中的 <code>server_name</code>：<code>server_name qa.yourcompany.com;</code></li>
+  <li><code>sudo nginx -t && sudo systemctl reload nginx</code></li>
+</ol>
+</div>
+
+<div class="step">
+<h3>方式三：配置 HTTPS（推荐）</h3>
+<p>免费申请 Let's Encrypt 证书：</p>
+<pre><code># 安装 certbot
+sudo apt install -y certbot python3-certbot-nginx
+
+# 自动配置 HTTPS
+sudo certbot --nginx -d qa.yourcompany.com
+
+# 证书自动续期
+sudo certbot renew --dry-run</code></pre>
+<p>之后访问 <code>https://qa.yourcompany.com</code> 即可享受加密连接。</p>
+</div>
+
+<h2>日常维护</h2>
+<table>
+<tr><th>操作</th><th>命令</th></tr>
+<tr><td>查看服务状态</td><td><code>sudo systemctl status vehicle-qa</code></td></tr>
+<tr><td>重启服务</td><td><code>sudo systemctl restart vehicle-qa</code></td></tr>
+<tr><td>查看服务日志</td><td><code>sudo journalctl -u vehicle-qa -f</code></td></tr>
+<tr><td>更新知识库</td><td>编辑 md 文件 → <code>python3 build_kb.py</code> → <code>sudo systemctl restart vehicle-qa</code></td></tr>
+<tr><td>更新代码</td><td>上传新文件 → <code>sudo systemctl restart vehicle-qa</code></td></tr>
+</table>
+
+<h2>故障排查</h2>
+<table>
+<tr><th>问题</th><th>检查方法</th></tr>
+<tr><td>无法访问</td><td>检查阿里云安全组是否开放 80 端口; <code>curl http://localhost:8000/api/status</code></td></tr>
+<tr><td>502 Bad Gateway</td><td><code>sudo systemctl status vehicle-qa</code> 确认服务是否在运行</td></tr>
+<tr><td>问答无响应</td><td>检查 <code>journalctl -u vehicle-qa</code> 日志，确认 SiliconFlow API 是否可达</td></tr>
+<tr><td>Nginx 配置错误</td><td><code>sudo nginx -t</code> 检查语法</td></tr>
+</table>
+
+<div class="warn">
+<strong>安全提示：</strong>本指南中的 API Key 已写入 systemd 服务文件。<br>
+如需更换 Key，编辑 <code>/etc/systemd/system/vehicle-qa.service</code> 中的 <code>Environment="API_KEY=xxx"</code> 行，然后执行 <code>sudo systemctl daemon-reload && sudo systemctl restart vehicle-qa</code>。
+</div>
+
+<p style="text-align:center;color:var(--muted);margin-top:3rem;font-size:.85rem;">
+系统架构：RAG 混合检索（BGE-M3 向量 + 中文关键词） + Qwen3-8B 生成 · 嵌入 & 大模型均免费<br>
+© 车驾管知识库问答系统
+</p>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<view class="about">
+
+  <view class="head">
+    <image class="logo" src="/assets/avatar-144.png" mode="aspectFill" />
+    <view class="name">{{appName}}</view>
+    <view class="ver">版本 {{version}} · 非官方应用</view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">免责声明</view>
+    <view class="card-body">
+      <text>本小程序为个人开发的法规查询工具，<text class="em">不代表任何政府部门或公安机关交通管理部门</text>。所有内容依据公开发布的法规条文整理，仅供参考学习，不构成执法依据，也不能替代交管部门的正式答复。</text>
+    </view>
+    <view class="card-body">
+      <text>本小程序<text class="em">不办理任何业务</text>：不能处理违章、不能预约考试、不能办理换证年检，也不提供官方查询结果。需要在办事前确认口径时，请以车管所窗口答复或「交管 12123」官方渠道为准。</text>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">内容来源</view>
+    <view class="card-body">
+      <text>回答依据以下现行有效的法规与规范性文件整理：</text>
+    </view>
+    <view class="src-list">
+      <view class="src-row" wx:for="{{laws}}" wx:key="*this">
+        <view class="src-dot"></view>
+        <text class="src-text">{{item}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">关于 AI 生成内容</view>
+    <view class="card-body">
+      <text>常见问题由内置的法规事实库直接给出结论（不经模型改写）；只有在事实库未覆盖时，才由第三方大模型（智谱 GLM）结合检索到的法规条文组织语言。因此回答中可能出现表述不够完整的情况，重要事项请核对原文。</text>
+    </view>
+    <view class="card-body">
+      <text>每条回答都标注「AI 生成」并附法规来源，便于你自行核验。</text>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">反馈与纠错</view>
+    <view class="card-body">
+      <text>如果发现答案与现行法规不符，欢迎指出，我会核对后修正知识库。</text>
+    </view>
+    <view class="mail" wx:if="{{feedbackEmail}}" bindtap="copyMail">
+      <text>{{feedbackEmail}}</text>
+      <text class="copy">点击复制</text>
+    </view>
+    <view class="card-body muted" wx:else>
+      <text>反馈入口正在开通中，上线后在此展示。</text>
+    </view>
+  </view>
+
+  <view class="foot">
+    <text>本页面为上架审核所需的说明页，内容与首页展示一致。</text>
+  </view>
+
+</view>

@@ -1,0 +1,17 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/about/about"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#1A4B7C",
+    "navigationBarTitleText": "车驾规速查",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#F4F6F8",
+    "backgroundTextStyle": "light",
+    "enablePullDownRefresh": false
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

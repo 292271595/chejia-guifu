@@ -1,0 +1,17 @@
+# 构建上下文瘦身：只把运行时真正需要的东西送进云端构建
+__pycache__/
+*.py[cod]
+*.bak*
+chroma_db.bak*
+.env
+.git/
+.gitignore
+tools/
+data/
+miniprogram/
+assets_src/
+*.md
+!README.md
+.DS_Store
+Thumbs.db
+frontend/*.bak

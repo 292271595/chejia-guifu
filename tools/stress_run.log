@@ -1,0 +1,65 @@
+[Q01-1]   10.9s  anchor=['C6'] miss=[]
+[Q01-2]    5.0s  anchor=['C6'] miss=[]
+[Q02-1]   10.2s  anchor=[] miss=['小型']
+[Q02-2]    9.0s  anchor=[] miss=['小型']
+[Q03-1]    7.5s  anchor=['1年'] miss=[]
+[Q03-2]    6.5s  anchor=['1年'] miss=[]
+[Q04-1]    4.3s  anchor=['2年'] miss=[]
+[Q04-2]    4.8s  anchor=['2年'] miss=[]
+[Q05-1]    3.9s  anchor=['1年'] miss=[]
+[Q05-2]    3.1s  anchor=['1年'] miss=[]
+[Q06-1]    6.0s  anchor=['3年'] miss=[]
+[Q06-2]    5.3s  anchor=['3年'] miss=[]
+[Q07-1]    8.4s  anchor=['实习期'] miss=[]
+[Q07-2]    5.5s  anchor=['实习期'] miss=[]
+[Q08-1]   14.2s  anchor=['注销'] miss=[]
+[Q08-2]   18.4s  anchor=['注销'] miss=[]
+[Q09-1]    3.0s  anchor=['9分'] miss=[]
+[Q09-2]    5.0s  anchor=['9分'] miss=[]
+[Q10-1]    4.6s  anchor=[] miss=['9分']
+[Q10-2]    3.8s  anchor=[] miss=['9分']
+[Q11-1]    3.0s  anchor=['12分'] miss=[]
+[Q11-2]    2.2s  anchor=['12分'] miss=[]
+[Q12-1]    8.0s  anchor=[] miss=['12分']
+[Q12-2]    7.0s  anchor=[] miss=['12分']
+[Q13-1]    6.1s  anchor=['C1', 'C2', 'C5', 'F'] miss=[]
+[Q13-2]    5.7s  anchor=['C1', 'C2', 'C5', 'F'] miss=[]
+[Q14-1]    4.5s  anchor=['150', '5.0'] miss=[]
+[Q14-2]    4.1s  anchor=['150', '5.0'] miss=[]
+[Q15-1]    3.6s  anchor=['C1', 'C2'] miss=[]
+[Q15-2]    6.3s  anchor=['C1', 'C2'] miss=[]
+[Q16-1]    4.0s  anchor=['150'] miss=[]
+[Q16-2]    3.0s  anchor=['150'] miss=[]
+[Q17-1]    3.0s  anchor=['5年'] miss=[]
+[Q17-2]    4.0s  anchor=['5年'] miss=[]
+[Q18-1]    3.6s  anchor=['1年'] miss=[]
+[Q18-2]    3.4s  anchor=['1年'] miss=[]
+[Q19-1]    4.4s  anchor=[] miss=['2年', '科目一']
+[Q19-2]    5.1s  anchor=[] miss=['2年', '科目一']
+[Q20-1]    2.1s  anchor=['3年'] miss=[]
+[Q20-2]    2.3s  anchor=['3年'] miss=[]
+
+==============================================================================
+汇总（锚点命中数 / 2 次）
+OK   Q01 A2驾驶证能开C6轻型牵引挂车吗？                2/2
+FAIL Q02 C1驾驶证可以开9座的面包车吗？                 0/2
+OK   Q03 增驾C6需要什么条件？                      2/2
+OK   Q04 B1增驾A2需要持证几年？                    2/2
+OK   Q05 A2增驾A1需要持证几年？                    2/2
+OK   Q06 实习期上高速公路有什么要求？                   2/2
+OK   Q07 增驾后有实习期吗？                        2/2
+OK   Q08 实习期内记满12分会怎么样？                   2/2
+OK   Q09 驾驶与准驾车型不符的机动车记几分？                2/2
+FAIL Q10 在高速公路应急车道违法停车记几分？                0/2
+OK   Q11 饮酒后驾驶机动车记几分？                     2/2
+FAIL Q12 代替他人接受处罚和记分牟利记几分？                0/2
+OK   Q13 70周岁以上还能申请哪些准驾车型？                2/2
+OK   Q14 一只眼睛看不见能考驾照吗？                    2/2
+OK   Q15 听力不好戴助听器能考什么驾照？                  2/2
+OK   Q16 B1驾驶证身高要求是多少？                    2/2
+OK   Q17 醉驾被吊销驾驶证后几年能重新申请？                2/2
+OK   Q18 驾驶证超过有效期多久会被注销？                  2/2
+FAIL Q19 驾驶证因超期未换证被注销后还能恢复吗？              0/2
+OK   Q20 学习驾驶证明有效期是多久？                    2/2
+
+结果已存: C:\RAG\rag-vehicle-system\tools\stress_result.json

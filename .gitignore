@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 密钥与环境
+.env
+*.local
+
+# 备份与临时产物
+*.bak
+*.bak.*
+chroma_db.bak*
+assets_src/
+tools/*.json
+backend/*.log
+
+# 微信开发者工具个人配置（含本机路径，不该进仓库）
+miniprogram/project.private.config.json
+
+# 系统
+.DS_Store
+Thumbs.db
