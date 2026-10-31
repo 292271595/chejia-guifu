@@ -69,7 +69,12 @@ EMBED_BACKEND = os.getenv("EMBED_BACKEND", "cloud")
 EMBED_API_BASE = os.getenv("EMBED_API_BASE", "https://api.siliconflow.cn/v1")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "BAAI/bge-m3")
 # 嵌入 Key 单独配置：生成用智谱、嵌入用硅基流动是常态，混用一个变量迟早出事
-EMBED_API_KEY = os.getenv("EMBED_API_KEY", "") or API_KEY
+EMBED_API_KEY = os.getenv("EMBED_API_KEY", "").strip()
+# 只有在「生成和嵌入是同一家服务商」时才能复用密钥：智谱的 embedding-3 与 glm 共用 key。
+# 硅基流动的 bge-m3 必须用它自己的 key——拿智谱 key 去请求只会拿到 401，
+# 而 401 在检索层会被熔断成「静默降级 BM25」，表现是「能答但答不准」，最难查的一类故障。
+if not EMBED_API_KEY and EMBED_BACKEND == "zhipu":
+    EMBED_API_KEY = API_KEY
 # 查询期嵌入超时：必须远小于 15s 前端硬上限，且超时后靠 BM25 兜住
 EMBED_TIMEOUT = float(os.getenv("EMBED_TIMEOUT", "8"))
 
@@ -362,7 +367,9 @@ def health():
     embed_vector 反映向量通道是否处于降级状态（云端嵌入不可用时为 false），
     排查时不用翻日志就能判断"答得差"是不是嵌入挂了导致的。
     """
-    vec_ok = True
+    # 引擎没起来时给 None 而不是 True：之前默认 True，导致 engine=false 的响应里
+    # 依然显示 embed_vector:true，看着像「嵌入是好的」，把排查方向带偏。
+    vec_ok = None
     model_name = EMBED_MODEL
     dim = None
     if rag_engine is not None:
@@ -389,16 +396,30 @@ def health():
     }
 
 
-# 必需的环境变量清单：变量名 → 是否含密钥（影响展示方式）
-_REQUIRED_ENV = {
-    "API_KEY": True,
-    "GEN_BACKEND": False,
-    "MODEL": False,
-    "EMBED_BACKEND": False,   # cloud / local / none，必须明文可见，填错就崩
-    "EMBED_API_BASE": False,
-    "EMBED_MODEL": False,
-    "EMBED_API_KEY": True,
-    "QUERY_TIMEOUT": False,
+# 环境变量清单：只有 required=True 的才必须由人来填，其余代码里都有默认值。
+#
+# 为什么要把「必填」从 8 条砍到 2 条：之前让用户在控制台逐条填 8 个变量，
+# 多一条就多一个填错/漏填/带空格的机会，而且 MODEL / EMBED_MODEL 这类
+# 有默认值的变量漏填根本不影响运行。把「必须填什么」压到最小，
+# 是降低部署失败率最直接的办法——比加更多报错提示有效。
+_ENV_SPEC = {
+    "API_KEY":        {"secret": True,  "required": True,  "default": None,
+                       "desc": "生成模型 Key（智谱 glm-4-flash）"},
+    "EMBED_API_KEY":  {"secret": True,  "required": True,  "default": None,
+                       "desc": "嵌入模型 Key（硅基流动 bge-m3），不能与上面共用"},
+    "GEN_BACKEND":    {"secret": False, "required": False, "default": "zhipu",
+                       "desc": "生成后端"},
+    "MODEL":          {"secret": False, "required": False, "default": "glm-4-flash",
+                       "desc": "生成模型名"},
+    "EMBED_BACKEND":  {"secret": False, "required": False, "default": "cloud",
+                       "desc": "嵌入后端，云端为 cloud"},
+    "EMBED_API_BASE": {"secret": False, "required": False,
+                       "default": "https://api.siliconflow.cn/v1",
+                       "desc": "嵌入服务地址"},
+    "EMBED_MODEL":    {"secret": False, "required": False, "default": "BAAI/bge-m3",
+                       "desc": "嵌入模型名，1024 维"},
+    "QUERY_TIMEOUT":  {"secret": False, "required": False, "default": "12",
+                       "desc": "查询超时，需 < 15"},
 }
 
 
@@ -420,37 +441,61 @@ def env_report():
     设计动机：云托管环境变量是版本级配置，填了没发布、发布没成功、名字拼错、
     值带空格，四种情况在 /health 里表现完全一样（都是 engine=false），
     靠猜只能一轮轮重试。这个接口把四种情况一次性区分开。
+
+    区分「必填」与「有默认值」：只有 missing 里的才是真正要补的，
+    optional_missing 只是走默认值，不影响运行——避免用户为 6 个默认值白折腾。
     """
     items = {}
-    missing = []
-    blank = []
-    for k, secret in _REQUIRED_ENV.items():
+    missing = []          # 必填且缺失 → 服务不可用
+    optional_missing = []  # 非必填且缺失 → 走默认值，不影响运行
+    abnormal = []         # 存在但值为空 / 首尾带空格
+    for k, spec in _ENV_SPEC.items():
         raw = os.getenv(k)
+        rec = {
+            "required": spec["required"],
+            "default": spec["default"],
+            "desc": spec["desc"],
+        }
         if raw is None:
-            items[k] = {"present": False, "value": ""}
-            missing.append(k)
-        elif raw.strip() == "":
-            items[k] = {"present": True, "value": "(空字符串)"}
-            blank.append(k)
-        else:
-            # 值首尾带空格是控制台粘贴的高频错误，单独标出来
-            dirty = raw != raw.strip()
-            items[k] = {
-                "present": True,
-                "value": _mask(raw.strip(), secret),
-                "trailing_space": dirty,
-            }
-            if dirty:
-                blank.append(k + "(首尾有空格)")
+            rec["present"] = False
+            rec["value"] = ""
+            rec["effective"] = spec["default"]
+            items[k] = rec
+            (missing if spec["required"] else optional_missing).append(k)
+            continue
+        if raw.strip() == "":
+            rec.update({"present": True, "value": "(空字符串)", "effective": spec["default"]})
+            items[k] = rec
+            abnormal.append(k)
+            continue
+        dirty = raw != raw.strip()
+        rec.update({
+            "present": True,
+            "value": _mask(raw.strip(), spec["secret"]),
+            "effective": raw.strip(),
+            "trailing_space": dirty,
+        })
+        items[k] = rec
+        if dirty:
+            abnormal.append(k + "(首尾有空格)")
+
+    total_required = sum(1 for s in _ENV_SPEC.values() if s["required"])
     return {
         "missing": missing,
-        "abnormal": blank,
-        "ok": not missing and not blank,
+        "optional_missing": optional_missing,
+        "abnormal": abnormal,
+        "ok": not missing and not abnormal,
+        "required_filled": f"{total_required - len(missing)}/{total_required}",
         "vars": items,
         "hint": (
-            "missing 里的变量在容器里根本不存在 → 控制台没保存成功，或保存后没发布新版本"
+            ("缺必填项：%s。控制台「服务设置 → 环境变量」补齐后必须重新发布新版本，"
+             "重启实例无效。" % "、".join(missing))
             if missing else
-            ("abnormal 里的变量值异常（空/带空格）→ 重新粘贴" if blank else "环境变量齐全")
+            ("值异常：%s（空值或首尾带空格），重新粘贴。" % "、".join(abnormal))
+            if abnormal else
+            ("必填 %d 条齐全%s" % (total_required,
+                                "；另有 %d 条走默认值，可不填" % len(optional_missing)
+                                if optional_missing else ""))
         ),
     }
 

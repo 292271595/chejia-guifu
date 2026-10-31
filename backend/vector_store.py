@@ -63,7 +63,10 @@ class CloudEmbeddingFunction(EmbeddingFunction):
     def __init__(self, api_key: str, api_base: str = "https://api.siliconflow.cn/v1",
                  model: str = "BAAI/bge-m3", dimension: int = 1024, timeout: float = 8.0):
         if not api_key:
-            raise ValueError("云端嵌入需要 API Key（EMBED_API_KEY 或 API_KEY）")
+            raise ValueError(
+                "云端嵌入缺 EMBED_API_KEY（硅基流动 Key）。"
+                "注意：不能拿智谱的 API_KEY 顶替，两家服务商不通用，填错只会得到 401。"
+            )
         # max_retries=0：重试必须由调用方决定，SDK 静默重试会放大延迟
         self.client = OpenAI(base_url=api_base, api_key=api_key,
                              timeout=timeout, max_retries=0)

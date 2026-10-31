@@ -93,16 +93,23 @@ def main():
         print(f"  {SKIP} 接口不存在：{err}")
         print("        → 云端跑的是旧镜像（该接口是后加的），重新发布一次即可")
     elif not e.get("ok"):
-        print(f"  {FAIL} missing={e.get('missing')} abnormal={e.get('abnormal')}")
-        print(f"         → {e.get('hint')}")
-        for k in (e.get("missing") or []):
-            print(f"         · {k}：容器里不存在 → 控制台「服务设置 → 环境变量」没保存，或没发布新版本")
-        for k in (e.get("abnormal") or []):
+        miss = e.get("missing") or []
+        abn = e.get("abnormal") or []
+        opt = e.get("optional_missing") or []
+        print(f"  {FAIL} 必填缺 {len(miss)} 条：{miss}")
+        for k in miss:
+            v = (e.get("vars") or {}).get(k, {})
+            print(f"         · {k} —— {v.get('desc', '')}")
+        for k in abn:
             print(f"         · {k}：值异常（空 / 首尾有空格）→ 重新粘贴，注意别带空格")
-        problems.append("环境变量未注入")
+        if opt:
+            print(f"  {PASS} 其余 {len(opt)} 条有代码默认值，不填也能跑：{opt}")
+        print(f"         → {e.get('hint')}")
+        problems.append("必填环境变量未注入")
     else:
-        shown = {k: v.get("value") for k, v in (e.get("vars") or {}).items()}
-        print(f"  {PASS} 8 条齐全  {json.dumps(shown, ensure_ascii=False)}")
+        shown = {k: v.get("value") for k, v in (e.get("vars") or {}).items()
+                 if (v.get("required") or v.get("present"))}
+        print(f"  {PASS} 必填 {e.get('required_filled')} 齐全  {json.dumps(shown, ensure_ascii=False)}")
 
     # ---------- 3. /api/status ----------
     print("\n[3/4] GET /api/status")
