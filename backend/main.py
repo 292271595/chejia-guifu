@@ -19,6 +19,7 @@ import concurrent.futures
 import re
 
 from rag_engine import RAGEngine, create_rag_engine
+import security
 
 
 # ============ .env 加载（零依赖，密钥不进代码不进仓库） ============
@@ -282,6 +283,21 @@ def query(request: QueryRequest, http_request: Request):
     if len(q) > MAX_QUESTION_LEN:
         q = q[:MAX_QUESTION_LEN]
 
+    # 内容安全第一关：用户提问先过微信 msg_sec_check。
+    # 返回 200 + 友好文案而不是 4xx——小程序端的 normalizeError 会把 403 显示成
+    # "当前为内测状态"，用状态码表达"内容违规"会被翻译成完全无关的错误提示。
+    passed, why = security.check_text(q, openid=openid)
+    if not passed:
+        msg = "这个问题涉及不适宜内容，我没法回答。可以换成与驾驶证、车辆登记、年检相关的问题。"
+        return JSONResponse({
+            "success": True,
+            "answer": msg,
+            "blocks": [{"type": "p", "text": msg}],
+            "fact_hit": None,
+            "sources": [],
+            "degraded": "blocked_input",
+        })
+
     def _norm_source(s):
         """兼容两种来源结构：检索结果（含 metadata）与事实表（扁平结构）。"""
         if isinstance(s, dict) and "metadata" in s:
@@ -348,6 +364,15 @@ def query(request: QueryRequest, http_request: Request):
         }, status_code=500)
 
     answer = result.get("answer", "")
+
+    # 内容安全第二关：AI 生成的答案同样要过检测（审核会查生成侧，不只查输入）。
+    # 只在拿到非空答案时才调；检测本身超时 1.2s，不会吃掉生成预算。
+    if answer:
+        ans_ok, ans_why = security.check_text(answer, openid=openid)
+        if not ans_ok:
+            answer = "抱歉，这次生成的回答未能通过内容校验。可以换个更具体的问法再试一次。"
+            result = dict(result, sources=[])   # 正文已替换，法条出处不再对应
+
     blocks = to_blocks(answer)
     payload = {
         "success": True,
@@ -393,6 +418,9 @@ def health():
         "embed_model": model_name,
         "embed_dim": dim,
         "embed_vector": vec_ok,
+        # 内容安全是否真在生效：runtime_available=false 说明没检测到云托管注入的
+        # token（本地开发正常，线上若为 false 则是「开放接口服务」没配好）
+        "sec_check": security.status(),
     }
 
 
