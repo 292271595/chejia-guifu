@@ -107,9 +107,23 @@ def main():
         print(f"         → {e.get('hint')}")
         problems.append("必填环境变量未注入")
     else:
-        shown = {k: v.get("value") for k, v in (e.get("vars") or {}).items()
+        vars_ = e.get("vars") or {}
+        shown = {k: v.get("value") for k, v in vars_.items()
                  if (v.get("required") or v.get("present"))}
-        print(f"  {PASS} 必填 {e.get('required_filled')} 齐全  {json.dumps(shown, ensure_ascii=False)}")
+        # required_filled / optional_missing 是 183bcde 之后才有的字段；
+        # 旧镜像不返回，直接打印会变成「必填 None 齐全」这种看着像出错的话。
+        # 缺字段时按变量自身口径自己算，避免把「版本旧」误读成「检查失败」。
+        filled = e.get("required_filled")
+        if not filled:
+            req_keys = [k for k, v in vars_.items() if v.get("required")]
+            got = [k for k in req_keys
+                   if vars_[k].get("present") and vars_[k].get("value") not in ("", "(空字符串)")]
+            filled = f"{len(got)}/{len(req_keys)}" if req_keys else "n/a"
+            if not req_keys:
+                print(f"  {WARN} 该镜像未返回 required 字段（版本较旧），无法区分必填/非必填")
+        opt = e.get("optional_missing")
+        tail = f"；{len(opt)} 条走默认值" if opt else ""
+        print(f"  {PASS} 必填 {filled} 齐全{tail}  {json.dumps(shown, ensure_ascii=False)}")
 
     # ---------- 3. /api/status ----------
     print("\n[3/4] GET /api/status")
