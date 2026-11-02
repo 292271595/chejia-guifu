@@ -55,23 +55,50 @@ CIRCUIT_SECONDS = float(os.getenv("SEC_CHECK_CIRCUIT_SECONDS", "300"))
 
 _enabled_flag = os.getenv("SEC_CHECK_ENABLE", "1").strip().lower() not in ("0", "false", "off", "no")
 _runtime_available = None      # 惰性探测，避免每次请求都 stat 文件
+_runtime_probed_at = 0.0
 _fail_streak = 0
 _circuit_until = 0.0
 
+# 探测为「不可用」时多久后重试。
+#
+# 为什么要 TTL 而不是一次定终身：云托管注入 token 文件是**异步**的——容器进程
+# 先起来，旁挂组件随后才把 token 推到 /.tencentcloudbase/wx/。如果首次探测正好
+# 落在这个窗口里（比如启动探针打了一次 /health），结果会被钉死成 False，
+# 此后哪怕控制台权限配好了、token 也注入成功了，服务仍然一直跳过检测，
+# 表面上 /health 一片绿，实际内容安全等于没开。这是最难查的一类故障。
+#
+# 反向则不需要 TTL：一旦探到 True 就说明组件在岗，直接缓存住。
+_RUNTIME_NEGATIVE_TTL = float(os.getenv("SEC_CHECK_PROBE_TTL", "30"))
+_logged_unavailable = False
+
 
 def _available() -> bool:
-    """判断当前是否具备云调用条件（只在首次判断时探测一次）。"""
-    global _runtime_available
-    if _runtime_available is None:
-        if not _enabled_flag:
-            _runtime_available = False
-        elif os.getenv("SEC_CHECK_FORCE", "").strip() in ("1", "true", "on"):
-            # 允许本地强制开启，用于联调；需自行提供 token 才能调通
-            _runtime_available = True
-        else:
-            _runtime_available = os.path.exists(TOKEN_FILE)
-        if not _runtime_available:
-            logger.info("[security] 非云托管环境或已禁用，内容检测跳过（局部不发请求）")
+    """判断当前是否具备云调用条件（探到不可用时按 TTL 重试，探到可用即缓存）。"""
+    global _runtime_available, _runtime_probed_at, _logged_unavailable
+    now = time.time()
+
+    if _runtime_available is True:
+        return True
+    if _runtime_available is False and (now - _runtime_probed_at) < _RUNTIME_NEGATIVE_TTL:
+        return False
+
+    _runtime_probed_at = now
+    if not _enabled_flag:
+        _runtime_available = False
+    elif os.getenv("SEC_CHECK_FORCE", "").strip() in ("1", "true", "on"):
+        # 允许本地强制开启，用于联调；需自行提供 token 才能调通
+        _runtime_available = True
+    else:
+        _runtime_available = os.path.exists(TOKEN_FILE)
+
+    if _runtime_available:
+        if _logged_unavailable:
+            logger.info("[security] 已检测到云托管 token，内容检测启用")
+        _logged_unavailable = False
+    elif not _logged_unavailable:
+        logger.info("[security] 未发现 %s，内容检测跳过（每 %.0fs 重试一次）",
+                    TOKEN_FILE, _RUNTIME_NEGATIVE_TTL)
+        _logged_unavailable = True
     return _runtime_available
 
 
@@ -150,10 +177,17 @@ def _trip_breaker(reason: str) -> None:
 def status() -> dict:
     """给 /health 用：让运维一眼看到检测到底有没有在工作、是否已熔断。"""
     remaining = max(0.0, _circuit_until - time.time())
-    return {
+    available = _available()
+    s = {
         "enabled": _enabled_flag,
-        "runtime_available": _available(),
+        "runtime_available": available,
         "timeout": DEFAULT_TIMEOUT,
         "circuit_open": remaining > 0,
         "circuit_reset_in": round(remaining, 1),
     }
+    if not available:
+        # 区分「主动关掉」和「容器里没有 token」，后者才是配置问题
+        s["hint"] = ("SEC_CHECK_ENABLE=0，已主动关闭" if not _enabled_flag else
+                     f"容器内无 {TOKEN_FILE}：请确认控制台「云调用 → 云调用权限配置」"
+                     f"已保存 /wxa/msg_sec_check，且当前版本是在保存之后发布的")
+    return s
