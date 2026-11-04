@@ -253,8 +253,20 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
                 "fact_hit": fact.get("fact"),
             }
 
+        # ─── 防线一之前：口语 → 法规术语改写 ───
+        # 知识库是法规原文用语，用户说的是车圈口语（转籍/过户/解押/滞纳金），
+        # 字面不重叠会导致漏召回，这里补上正式术语再检索。
+        search_query = user_question
+        try:
+            import glossary
+            search_query, gloss_hits = glossary.expand(user_question)
+            if gloss_hits:
+                print(f"[RAGEngine] 术语改写命中 {gloss_hits}")
+        except Exception as e:
+            print(f"[RAGEngine] 术语改写跳过（不影响检索）: {e}")
+
         # ─── 防线一：检索更多上下文 ───
-        search_results = self.vector_store.search(user_question, top_k=top_k)
+        search_results = self.vector_store.search(search_query, top_k=top_k)
 
         if not search_results:
             return {

@@ -168,9 +168,16 @@ PROBES = [
 def retrieval_check(store):
     print("\n[4/4] 检索自检（top-3 首行，看是否答在点上）")
     ok = 0
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), "backend"))
+        import glossary          # 自检要走与线上一致的术语改写，否则测不到真实链路
+    except Exception:
+        glossary = None
     for q, anchor in PROBES:
         t0 = time.time()
-        hits = store.search(q, top_k=3)
+        sq = glossary.expand(q)[0] if glossary else q
+        hits = store.search(sq, top_k=3)
         ms = (time.time() - t0) * 1000
         hit = any(anchor in h["content"] for h in hits)
         ok += hit

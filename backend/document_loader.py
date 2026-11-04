@@ -34,7 +34,7 @@ from typing import Dict, List
 MAX_CHUNK = 1200
 HARD_MAX = 1600
 
-_CN = "零一二三四五六七八九十百"
+_CN = "零〇一二三四五六七八九十百千"
 _CN_VAL = {"零": 0, "一": 1, "二": 2, "三": 3, "四": 4,
            "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
 
@@ -59,6 +59,9 @@ def cn2int(s: str) -> int:
             cur = 0
         elif ch == "百":
             total += (cur or 1) * 100
+            cur = 0
+        elif ch == "千":
+            total += (cur or 1) * 1000
             cur = 0
     return total + cur
 
@@ -108,6 +111,12 @@ class DocumentLoader:
             path = os.path.join(self.knowledge_dir, filename)
             with open(path, "r", encoding="utf-8") as f:
                 text = f.read()
+            # 防御：知识库里如果残留已废止的法源，直接跳过而不是入库。
+            # 缺一条顶多答"查不到"，召回废止条文却会给出有出处、但已失效的答案。
+            head = "\n".join(text.split("\n")[:15])
+            if "已废止" in head or "&#9203;" in head or "⛔" in head:
+                print(f"[DocumentLoader] 跳过已废止文件：{filename}")
+                continue
             source = filename[:-3]
             self._chunks = []
             doc_title = self._doc_title(text, source)
@@ -467,6 +476,10 @@ class DocumentLoader:
             return
         # 表格分隔符之类的纯符号块（如单个 "|"）没有任何检索价值，直接丢弃
         if len(content) < 15 and not re.search(r"[\u4e00-\u9fffA-Za-z0-9]", content):
+            return
+        # 标准类文件从 docx 提取后常残留 "h2"、"h3"、纯编号这类碎片，
+        # 它们不含任何可检索语义，留在库里只会稀释检索结果
+        if len(content) < 12 and len(re.findall(r"[\u4e00-\u9fff]", content)) < 4:
             return
         m = dict(meta)
         m["chunk_index"] = str(len(self._chunks))
