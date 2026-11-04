@@ -42,6 +42,7 @@ import fact_admin
 import fact_score
 import fact_exam
 import fact_vehicle
+import fact_accident
 import fact_license_ext as ext
 
 # ============================================================
@@ -766,6 +767,14 @@ QUALIFY = {"QUALIFY"}
 SCORE_COV = {"SCORE", "VALUE", "PENALTY"}
 
 _HANDLERS = [
+    # ── 0. 交通事故致人伤亡的责任与后果（二维判决表）──
+    # 必须排在吊销规则之前：致人死亡问题里只要沾上"逃逸/醉驾"就会被吊销规则接走，
+    # 而吊销规则只答"多久能重考"，答不了"是否构罪、判几年"。
+    (fact_accident.q_accident_death,
+     r"(?:致?人死亡|撞死|身亡|致死|死亡).{0,14}(?:责任|处理|判|赔|罪|刑事|吊销|坐牢|量刑)"
+     r"|(?:同等|主要|全部).{0,8}责任.{0,14}(?:死亡|撞死|身亡|致死|处理|判|罪)"
+     r"|(?:撞死|致死|致人死亡).{0,4}(?:坐牢|判刑|判几|会判)",
+     {"PENALTY", "QUALIFY", "DURATION", "VALUE"}),
     # ── 1. 驾驶证状态异常（注销/吊销/暂扣期间驾驶）──
     (ext.q_status_drive,
      r"(?:注销|吊销|暂扣|扣留|超期|过期|失效).{0,12}(?:开车|驾驶|上路|骑车|算|属于)",

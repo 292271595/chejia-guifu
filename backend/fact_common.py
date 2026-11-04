@@ -289,6 +289,9 @@ def num_style(text: str) -> str:
     压力测试里"记分周期为十二个月""提前三个月"这类表述与用户/判分口径
     （12个月、90日）对不上，属于同一类表达不一致问题，统一在输出层收敛。
     条款序号（第十二条、第三项）不在单位表内，不会被改写。
+
+    例外：刑罚幅度"三年以上七年以下""五年以下"是法律固定表述，转成"3年以上"
+    既不规范也会让判刑类回答显得业余，因此原样保留。
     """
     def _rep(m):
         if m.group(1):
@@ -300,6 +303,10 @@ def num_style(text: str) -> str:
             return m.group(0)
         # "一次记12分""一项规定"属于固定法律表达，保持原样，不改成"1次"
         if val == 1 and raw in ("一", "壹"):
+            return m.group(0)
+        # 刑罚幅度不转：三年以上、五年以下、七年以上
+        tail = text[m.end():m.end() + 3]
+        if tail.startswith("年以上") or tail.startswith("年以下"):
             return m.group(0)
         return str(val)
     return _NUM_STYLE_RE.sub(_rep, text)

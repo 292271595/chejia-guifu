@@ -65,6 +65,15 @@ class RAGEngine:
 1. 只能基于下方"知识库内容"回答。知识库没有的信息，回答："根据目前知识库，该问题暂无准确信息，请咨询当地车管所或交管部门。"
 2. 每个事实性陈述必须基于知识库原文，不可编造。回答中不要出现[片段X]标记，直接给出简洁答案。
 3. 不同车型标准不同，严格按用户问的车型对照，不可跨车型套用。
+4. **引用条款号只能用知识库片段里出现过的**。片段里没写到的条号一律不写——宁可只说法规名称、不写条号，也不要编一个像样的条号。
+
+【分项条文必须逐项对照 —— 违反即错误】
+- 条文里带（一）（二）（三），或片段末尾标了「含 N 个并列分项」的，**每一项是独立的一套要件**，不是同一件事的不同说法。
+- 必须先判断用户情形**是否完整满足某一项的全部要件**（责任等级、人数、金额、车型等），再说该项结论；只满足部分要件的，明确说"不落入本项"。
+- ⚠️ 严禁把几个分项的共同结果（如"处三年以下有期徒刑或者拘役"）拎出来，配上其中某一项的条件做概括。这正是最常错的地方：
+  《交通肇事解释》第二条（一）是"死亡一人或重伤三人以上，**负全部或者主要责任**"，第二条（二）是"**死亡三人以上**，负同等责任"。
+  因此"负同等责任致一人死亡"**不构成交通肇事罪**，只能说成"情形的分界在人数和责任等级上"，绝不能答成"负同等以上责任致人死亡即处三年以下"。
+- 用户问的是区间（如"同等以上责任""超员多少"）时，把区间覆盖的每种情形**分开说，一句一项**，不要合并成一个结论。
 
 【车型代码速查】
 A1=大型客车 A2=重型牵引挂车 A3=城市公交车 B1=中型客车 B2=大型货车
@@ -148,34 +157,107 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
 === 知识库内容结束 ===
 
 === 输出要求（硬约束） ===
-- **总字数不超过 350 字**，直接给结论，不铺垫、不复述问题、不写"根据知识库"。
-- 用户一次问多件事时，用 1./2. 分点，每点一句话说清结论 + 依据条款号。
+- **总字数不超过 400 字**，直接给结论，不铺垫、不复述问题、不写"根据知识库"。
+- 用户一次问多件事，或问题落在一个区间/多个分项上时，用 1./2. 分点，每点一句话说清"什么情形 → 什么结论 + 依据条款号"。
+- 一种违法行为的处罚常常是多项并列（罚款、拘留、记分、吊销、禁驾），知识库片段里出现的都要列出，不要只答其中一项。
 - 引用写到"《XX规定》第X条"即可，不要抄原文；原文交给下方来源列表。
-- 宁可少说，不要为了完整而堆砌——超长回答会让用户在手机上读不完。
+- 宁可少说，不要为了完整而堆砌——超长回答会让用户在手机上读不完；但**分项的每种情形都不能省**，省掉一种就是把结论说错。
 
 请回答用户问题：{{question}}"""
 
-    def _format_context(self, search_results: List[Dict], max_chars: int = 600) -> str:
+    # ── 并列分项识别 ──
+    # 法规里「(一)(二)(三)」每一项是**一套独立要件**，不是同一条件的不同写法。
+    # 小模型最常见的走样就是把多个分项的共同结果提取出来、配上其中一个分项的条件，
+    # 做成一勺烩的概括（2026-11-04「致人死亡负同等以上责任」那次就是这么错的：
+    # 解释第二条(一)要求「死亡一人…负全部或主要责任」，(二)才轮到「死亡三人以上、同等责任」，
+    # 模型却合成「同等以上责任致一人死亡→处三年以下」，把不构成犯罪的情形说成了犯罪）。
+    # 因而不改原文，只在片段尾部加一条元信息，明确"这是 N 个分项、必须逐项对照"。
+    _ENUM_CN_RE = re.compile(r"[（(]\s*([一二三四五六七八九十]{1,3})\s*[）)]")
+    _ENUM_DIGIT_RE = re.compile(r"(?m)^\s*(\d{1,2})\s*[.、．]\s*(?=\S)")
+
+    @classmethod
+    def _count_enumerations(cls, text: str) -> int:
+        """统计片段里的并列分项数（中文括号序号与阿拉伯数字序号取较大者）"""
+        cn = {m.group(1) for m in cls._ENUM_CN_RE.finditer(text)}
+        dg = {m.group(1) for m in cls._ENUM_DIGIT_RE.finditer(text)}
+        # 序号必须成串出现（至少两个不同序号）才算分项，单个「(一)」多半是行内引用
+        return max(len(cn) if len(cn) >= 2 else 0, len(dg) if len(dg) >= 2 else 0)
+
+    # 「…情形之一的，处三年以下有期徒刑或者拘役：」这种"共同结论 + 分项条件"的体例。
+    # 小模型最容易在这里把共同结论配到某一项的条件上，所以把两者在上下文里拆开说清楚。
+    _LEAD_CONCL_RE = re.compile(
+        r"(?P<lead>[^\n]{8,200}?)[：:]\s*\n+\s*[（(]\s*[一1]\s*[）)]"
+    )
+    _CONCL_VERB_RE = re.compile(r"(处|记|罚|吊销|拘留|没收|责令|不得|可以|应当)")
+
+    @classmethod
+    def _lead_conclusion(cls, text: str) -> str:
+        """抽出「下列情形之一」前面的那句共同结论；抽不到就返回空串"""
+        m = cls._LEAD_CONCL_RE.search(text)
+        if not m:
+            return ""
+        lead = m.group("lead").strip()
+        # 结论一般是最后一个逗号之后的部分："…情形之一的，处三年以下有期徒刑或者拘役"
+        tail = re.split(r"[，,]", lead)[-1].strip()
+        if 4 <= len(tail) <= 40 and cls._CONCL_VERB_RE.search(tail):
+            return tail
+        return ""
+
+    def _format_context(self, search_results: List[Dict], max_chars: int = 600):
         """将检索结果格式化为 prompt 上下文。
 
         max_chars 单片段截断：法条片段动辄 1500+ 字，8 条拼起来 prompt 超过 1 万字，
         是生成耗时的主因（实测 prompt 10014~13365 字）。截到 600 字并尽量在句子边界
         断开，prompt 压到 3000 字量级，生成耗时随输入 token 数近似线性下降。
+
+        两个针对"分项条文"的例外（分项型条文是答案出错的重灾区，宁可多花几十个 token）：
+        1. 分项条文放宽到 900 字，避免截断把 (三)(四) 切掉，让模型以为只有前两项；
+        2. 片段尾部加元信息，明确"本条有 N 个分项、须逐项对照"，并在截断时说明还剩几项。
+
+        返回 (context 文本, 分项片段信息列表)。
         """
         context_parts = []
+        enum_info = []
         for i, result in enumerate(search_results):
             content = (result.get("content") or "").strip()
-            if max_chars and len(content) > max_chars:
-                head = content[:max_chars]
+            n_enum = self._count_enumerations(content)
+            limit = 900 if n_enum >= 2 else max_chars
+            shown = n_enum
+            truncated = False
+            if limit and len(content) > limit:
+                head = content[:limit]
                 # 优先在句末断开，避免把一条款切成半句导致模型误读
                 cut = max(head.rfind("。"), head.rfind("；"), head.rfind("\n"))
-                if cut >= int(max_chars * 0.6):
+                if cut >= int(limit * 0.6):
                     head = head[:cut + 1]
                 content = head + "\n…（片段后略）"
+                truncated = True
+                if n_enum:
+                    shown = self._count_enumerations(content)
+
             source = result["metadata"].get("title", "未知")
             score = f"{result['score']:.2f}"
-            context_parts.append(f"[片段{i+1}] (来源: {source}, 相似度: {score})\n{content}\n")
-        return "\n".join(context_parts)
+            block = f"[片段{i+1}] (来源: {source}, 相似度: {score})\n{content}\n"
+
+            if n_enum >= 2:
+                meta = f"（元信息：本片段含 {n_enum} 个并列分项，每项要件不同，须逐项对照用户情形，不得合并陈述"
+                if truncated and shown < n_enum:
+                    meta += f"；此处因长度截断只保留前 {shown} 项，原文共 {n_enum} 项"
+                concl = self._lead_conclusion(content)
+                if concl:
+                    meta += (f"；「{concl}」是这 {n_enum} 项的共同结论，逐项适用，"
+                             f"但每一项的前置要件不同，必须先把用户情形对进某一项再说结论")
+                meta += "）"
+                block += meta + "\n"
+                enum_info.append({
+                    "idx": i + 1,
+                    "title": source,
+                    "count": n_enum,
+                    "shown": shown,
+                    "content": content,
+                })
+            context_parts.append(block)
+        return "\n".join(context_parts), enum_info
 
     def _call_llm(self, system_prompt: str, user_message: str, max_tokens: int = 900,
                   timeout: float = None) -> str:
@@ -281,7 +363,7 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
                 "sources": search_results
             }
 
-        context = self._format_context(filtered)
+        context, enum_info = self._format_context(filtered)
 
         # ─── 防线一点五：把确定性事实注入上下文 ───
         # 长问题/多诉求场景不走直答，但把已核对的事实作为最高优先级依据塞进去，
@@ -353,10 +435,77 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
         # 弥补小模型在长约束 prompt 下偶尔走神，对法规硬错误做强制纠正
         verified_answer = self._apply_guardrails(verified_answer, user_question)
 
+        # ─── 防线五：法条引用对账（编造条号的最后一道闸门）───
+        # 前面四道防线都在管"说了什么"，这道管"凭什么是这么说的"。
+        verified_answer, degrade = self._citation_gate(verified_answer, context, filtered)
+        if degrade:
+            return self._fallback_from_context(filtered, "citation")
+
         return {
             "answer": verified_answer,
             "sources": filtered
         }
+
+    # 引用被摘除后用来占位的说法，保证句子读起来仍然通顺
+    _CITE_PLACEHOLDER = "相关规定"
+
+    def _citation_gate(self, answer: str, context: str, filtered: List[Dict]):
+        """法条引用对账。返回 (处置后的答案, 是否需要整体降级为检索原文)。
+
+        处置分三档，按引用编造的严重程度递进：
+          1. 单条编造（条号不存在 / 法规不在库）→ 就地摘除该引用标注，末尾说明已摘除
+          2. 大面积编造（≥2 处且占全部引用一半以上）→ 整段论述的引用基础不可信，
+             不再修补，直接降级为检索原文。修补一处、留下九处，比不修更危险。
+          3. 条号真实但本次未检索到 → 保留字样，末尾统一提示"请以来源原文为准"
+
+        为什么不能只靠 prompt：模型编条号的成本远低于承认"知识库没有"，
+        而用户无法分辨「第九十一条」和「第一百二十五条」哪个是真的。
+        """
+        try:
+            import citation_guard
+        except Exception as e:
+            print(f"[RAGEngine] 引用对账模块不可用（跳过）: {e}")
+            return answer, False
+
+        try:
+            res = citation_guard.check(answer, context)
+        except Exception as e:
+            print(f"[RAGEngine] 引用对账异常（跳过）: {e}")
+            return answer, False
+
+        bad = res["bad"]
+        total = res["total"]
+        # 降级门槛：至少 2 处编造，且编造数多于可信数。
+        # 只按比例会误伤"1 处编造 + 1 处正常"这种还有半边依据可用的答案——
+        # 那种情况摘掉一处就够了，整段丢掉等于把有效信息也一起扔了。
+        if len(bad) >= 2 and len(bad) > (total - len(bad)):
+            print(f"[RAGEngine] 引用对账：{len(bad)}/{total} 处引用编造，整段不可信 -> 降级返回原文")
+            return answer, True
+
+        if bad:
+            print(f"[RAGEngine] 引用对账：摘除 {len(bad)} 处编造引用 -> "
+                  f"{[c.get('label') or c['law_raw'] for c in bad]}")
+            for c in bad:
+                raw = c["raw"]
+                if not raw or raw not in answer:
+                    continue
+                if c["status"] == "no_article":
+                    repl = f"《{c['doc']['name']}》{self._CITE_PLACEHOLDER}"
+                else:
+                    repl = self._CITE_PLACEHOLDER
+                answer = answer.replace(raw, repl, 1)
+            note = citation_guard.render_removal_note(bad)
+            if note:
+                answer += note
+
+        unverified = res["unverified"]
+        # 提示的门槛：仅当"有引用却一条都没在片段里对上"时才提示，
+        # 否则同一段里正常的引用也会被这句提示拖累成"都不太可靠"。
+        if unverified and len(unverified) >= max(1, total):
+            note = citation_guard.render_unverified_note(unverified)
+            if note:
+                answer += note
+        return answer, False
 
 
     def _fallback_from_context(self, filtered: List[Dict], reason: str = "") -> Dict:
@@ -370,6 +519,7 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
         heads = {
             "budget": "检索已完成，AI 整理超时。以下是为你在法规库中找到的原文：",
             "llm_error": "AI 整理暂时不可用。以下是为你在法规库中找到的原文：",
+            "citation": "AI 生成的回答中法条引用与法规库原文对不上，已为你改为直接列出原文：",
         }
         parts = [f"**{heads.get(reason, '以下是为你在法规库中找到的法规原文：')}**"]
         # 取 3 条而不是 2 条：混合检索的排序在长尾问题上并不总准，
