@@ -848,6 +848,12 @@ def create_rag_engine(persist_dir: str, api_base: str, api_key: str, model: str,
     try:
         vector_store._build_bm25_index()
         vector_store.search("驾驶证", top_k=1)  # 触发嵌入前向，把模型彻底唤醒
+        # 引用索引只有 9KB，读一次就好；放在预热里加载，省得算进第一个用户的 15 秒预算
+        try:
+            import citation_guard
+            citation_guard.index().load()
+        except Exception as e:
+            print(f"[create_rag_engine] 引用索引加载失败（不影响问答，仅跳过对账）: {e}")
         print(f"[create_rag_engine] 启动预热完成，耗时 {time.time() - t0:.2f}s")
     except Exception as e:
         print(f"[create_rag_engine] 预热失败（忽略，首次请求会自动重试）: {e}")
