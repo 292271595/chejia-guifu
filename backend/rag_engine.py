@@ -328,16 +328,56 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
             print(f"[RAGEngine] 事实表查询异常，回退 RAG: {e}")
 
         if fact:
-            print(f"[RAGEngine] 事实表命中 {fact.get('fact')}，直接返回确定性答案")
+            print(f"[RAGEngine] 事实表命中 {fact.get('fact')}，进入复核")
             # 事实层答案的数字是代码里写死的常量，理论上不会错，但模板拼接多了
             # 也会串（历史上有过「10 年」写成「5 年」）。这里只做日志自检：
             # 发现对不上就报出来，不改输出——事实层若被降级，等于丢掉最可靠的那条路。
             self._audit_fact_numbers(fact["answer"], fact.get("fact"))
-            return {
+
+            # ─── 防线零点五：模型复核「是否答错了对象」───
+            # 事实层按关键词路由，问句被送错处理器时会用确定性的口吻答出另一个制度，
+            # 而答案本身语法、法条、格式全正常（2026-11 事故：问 63 岁 A2 能否延期
+            # 继续驾驶，答成第七十五条延期换证）。这种错只能靠语义判断发现。
+            verdict = self._review_fact(user_question, fact, deadline)
+            if verdict.get("verdict") == "WRONG":
+                # 不重答：实测转检索生成耗时 5~10s，一半超时降级，答案不升反降
+                # （tools/exp3_recheck_via_rag.py）。改为退回法规原文，宁可难读不可错答。
+                try:
+                    sr = self.vector_store.search(user_question, top_k=3)
+                    filtered = [r for r in (sr or []) if r.get("score", 0) >= 0.05]
+                except Exception as e:
+                    filtered = []
+                    print(f"[RAGEngine] 复核拦截后补检索失败({type(e).__name__}: {e})")
+                if filtered:
+                    out = self._fallback_from_context(filtered, "fact_review")
+                    out["fact_hit"] = fact.get("fact")
+                    out["fact_review"] = verdict
+                    return out
+                # 检索也空了：宁可交回原文来源，也不要发一条自己都怀疑的答案
+                return {
+                    "answer": ("⚠️ 这个问题涉及多项名称相近的制度，系统无法确认哪一项适用于你的情形，"
+                               "请补充说明后重试，或咨询当地车管所。\n\n"
+                               f"（原候选答案所依据的条款：{'、'.join(fact.get('sources') or []) or '未标注'}）"),
+                    "sources": fact["sources"],
+                    "fact_hit": fact.get("fact"),
+                    "fact_review": verdict,
+                    "degraded": True,
+                }
+
+            out = {
                 "answer": fact["answer"],
                 "sources": fact["sources"],
                 "fact_hit": fact.get("fact"),
             }
+            # 复核结论一并回传，便于线上观测「这道题复核跑没跑、判了什么」，
+            # 前端不读这个字段，纯诊断用。
+            if verdict.get("verdict"):
+                out["fact_review"] = {"verdict": verdict["verdict"],
+                                      "reason": verdict.get("reason", "")[:120]}
+            if verdict.get("signals"):
+                # 信号只用于观测：事实层没错时它们不该影响输出
+                out["fact_signals"] = verdict["signals"]
+            return out
 
         # ─── 防线一之前：口语 → 法规术语改写 ───
         # 知识库是法规原文用语，用户说的是车圈口语（转籍/过户/解押/滞纳金），
@@ -517,6 +557,8 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
             "llm_error": "AI 整理暂时不可用。以下是为你在法规库中找到的原文：",
             "citation": "AI 生成的回答中法条引用与法规库原文对不上，已为你改为直接列出原文：",
             "number": "AI 生成的回答中有多个数值在法规原文里找不到对应，为避免误导，已改为直接列出原文：",
+            "fact_review": "AI 复核发现，这条答案讲的可能不是你问的那件事（法规里有多项制度名称相近）。"
+                           "为避免答错对象，已改为直接列出相关原文：",
         }
         parts = [f"**{heads.get(reason, '以下是为你在法规库中找到的法规原文：')}**"]
         # 取 3 条而不是 2 条：混合检索的排序在长尾问题上并不总准，
@@ -552,6 +594,54 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
     # ── 数字核对 ──
     # 老实现的量纲表与"是否出现在片段里"的判定已整体移到 number_guard（对全库索引核对），
     # 这里只保留处置策略，避免两套口径并存。
+    def _review_fact(self, question: str, fact: Dict, deadline: float) -> Dict:
+        """对事实层答案做「是否答错了对象」的复核。
+
+        返回 {"verdict": OK/WRONG/SKIP, "reason": ..., "signals": [...], "sec": ...}
+
+        设计取舍：
+        - 任何异常都 SKIP 并放行。复核是加分项，失败必须让原答案通过，
+          否则一次网络抖动就会把正确答案换成难读的原文。
+        - 预算不足 2 秒直接跳过，不冒险让复核吃掉检索时间。
+        - 实体信号（问句里的车型/年龄/制度词有没有落到答案里）零成本先算，
+          既用于日志观测，也作为线索喂给模型——它是线上事故的强先验。
+        """
+        try:
+            import fact_review
+        except Exception as e:
+            return {"verdict": "SKIP", "reason": f"复核模块不可用: {e}", "sec": 0.0}
+
+        if not fact_review.enabled():
+            return {"verdict": "SKIP", "reason": "复核已关闭（FACT_REVIEW=off）", "sec": 0.0}
+        if self.client is None:
+            return {"verdict": "SKIP", "reason": "生成侧模型未配置", "sec": 0.0}
+
+        answer = fact.get("answer") or ""
+        signals = fact_review.entity_signals(question, answer)
+
+        # signal 模式：只有实体信号报警才花那 1.4 秒。
+        # 三条线上事故全部能被信号命中（问句里的车型/年龄/制度词没落到答案里），
+        # 所以这条省时路线在最常见的错法上并不吃亏；吃亏的是「实体都在、制度答串」。
+        if fact_review.mode() == "signal" and not signals:
+            return {"verdict": "SKIP", "reason": "signal 模式：无实体信号", "signals": signals, "sec": 0.0}
+
+        remaining = deadline - time.time() if deadline else 5.0
+        if remaining < 2.0:
+            return {"verdict": "SKIP", "reason": f"预算不足（剩余 {remaining:.1f}s）",
+                    "signals": signals, "sec": 0.0}
+
+        timeout = max(1.5, min(3.5, remaining - 1.0))
+        r = fact_review.review(question, answer, self.client, self.model,
+                               timeout=timeout, signals=signals)
+        r["signals"] = signals
+        tag = fact.get("fact")
+        if r["verdict"] == "WRONG":
+            print(f"[RAGEngine] 复核判定答错对象 {tag}（{r['sec']:.1f}s）：{r['reason']}"
+                  + (f"｜信号 {signals}" if signals else ""))
+        elif r["verdict"] == "SKIP":
+            print(f"[RAGEngine] 复核跳过 {tag}：{r['reason']}")
+        return r
+
     @staticmethod
     def _audit_fact_numbers(answer: str, tag: str = ""):
         """事实层答案的数字体检：只报日志，不改输出。"""

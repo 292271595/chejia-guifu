@@ -448,6 +448,8 @@ _ENV_SPEC = {
                        "desc": "嵌入模型名，1024 维"},
     "QUERY_TIMEOUT":  {"secret": False, "required": False, "default": "12",
                        "desc": "查询超时，需 < 15"},
+    "FACT_REVIEW":    {"secret": False, "required": False, "default": "on",
+                       "desc": "事实层答案大模型复核开关（on/off）。开启后每题多约 1.4 秒，可拦住答错对象的答案"},
 }
 
 

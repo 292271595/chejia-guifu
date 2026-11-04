@@ -80,6 +80,8 @@ def main():
     ap.add_argument("--offline", action="store_true", help="只跑事实层，不调模型")
     ap.add_argument("--cat", default=None, help="只跑某一类")
     ap.add_argument("--verbose", action="store_true", help="打印每题答案片段")
+    ap.add_argument("--via-engine", action="store_true", dest="via_engine",
+                    help="事实层也走 rag_engine.query（含大模型复核），测的是线上真实路径，慢约 3 倍")
     args = ap.parse_args()
 
     questions = load_questions(args.cat)
@@ -96,17 +98,23 @@ def main():
         )
 
     rows = []
+    blocked = []
     t_all = time.time()
     for i, q in enumerate(questions, 1):
         qid, text = q["id"], q["q"]
         t0 = time.time()
+        review = None
         fact = fact_table.lookup(text)
 
-        if fact:
+        # 默认直连事实层（快，用于离线快速回归）。
+        # --via-engine 时走 rag_engine.query，与线上完全同一条路：
+        # 只有这条路才会经过「事实层答案大模型复核」，也才能发现复核误伤。
+        if fact and not (args.via_engine and not args.offline):
             layer = "fact"
             answer = fact["answer"]
             titles = [(s.get("title") or "") for s in fact.get("sources", [])]
             degraded = False
+            review = None
         elif args.offline:
             rows.append({"id": qid, "cat": q["cat"], "q": text, "layer": "skip",
                          "ok": None, "miss": [], "bad": [], "sec": 0,
@@ -114,11 +122,14 @@ def main():
             print(f"[{i:3d}/{len(questions)}] SKIP {qid} {text}")
             continue
         else:
-            layer = "rag"
+            layer = "fact" if fact else "rag"
             r = engine.query(text, top_k=6, budget=12)
             answer = r["answer"]
             titles = [((s.get("metadata") or {}).get("title") or "") for s in r.get("sources", [])]
             degraded = bool(r.get("degraded"))
+            review = (r.get("fact_review") or {}).get("verdict")
+            if review == "WRONG":
+                blocked.append((qid, text, (r.get("fact_review") or {}).get("reason")))
 
         ok, miss, bad = judge(answer, q["must"], q["must_not"])
         sec = time.time() - t0
@@ -138,7 +149,7 @@ def main():
                      "ok": ok, "miss": miss, "bad": bad, "sec": round(sec, 1),
                      "answer": answer, "cause": cause, "titles": titles,
                      "degraded": degraded, "basis": q.get("basis", ""),
-                     "hint": q.get("layer_hint", "")})
+                     "hint": q.get("layer_hint", ""), "review": review})
 
         flag = "PASS" if ok else "FAIL"
         tag = f" <- {cause}" if cause else ""
@@ -170,6 +181,14 @@ def main():
 
     deg = [r for r in scored if r["degraded"]]
     print(f"  降级 {len(deg)} 次")
+    if args.via_engine:
+        wr = [r for r in rows if r.get("review") == "WRONG"]
+        sk = [r for r in rows if r.get("review") == "SKIP"]
+        print(f"  大模型复核：判错 {len(wr)} 条、跳过 {len(sk)} 条、判对 "
+              f"{sum(1 for r in rows if r.get('review') == 'OK')} 条")
+        for r in wr:
+            print(f"    复核拦截 {r['id']} {r['q']}"
+                  f"｜{'仍判对（误伤已降级但断言宽松）' if r['ok'] else '该题判分未过'}")
 
     # 归因分布
     causes = {}
