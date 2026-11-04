@@ -293,6 +293,13 @@ def q_age70_apply(question: str) -> Optional[Dict]:
     if re.search(r"(还能|还可以|能不能|可不可以|能继续|还能不能)", question) \
             and re.search(r"(开|驾驶|骑)", question) \
             and not re.search(r"(申请|考|学车|增驾)", question):
+        # 这个分支只对摩托车成立（70 岁以上禁的是 D/E，要换 F）。
+        # 用户说了具体车型就交回 q_age_drive——它按车型逐类判定。
+        # 2026-11-04 实测事故：「70 岁 C1 还能开吗」被这里答成"不能开了，要换领 F 证"，
+        # C1 在 70 岁以上本来完全能开，属于答反。根因不是判错车型，是**没看车型**。
+        codes = extract_codes(question)
+        if codes and codes[0] not in ("D", "E"):
+            return None
         return result(
             "**不能开了，要换领轻便摩托车（F）驾驶证。**\n\n"
             "依据第六十五条第二款，年满 70 周岁后**不得驾驶**：低速载货汽车（C3）、三轮汽车（C4）、"
@@ -308,6 +315,12 @@ def q_age70_apply(question: str) -> Optional[Dict]:
                     "应当换领轻便摩托车驾驶证", "driving_license.md")],
             "AGE_DRIVE:70:MOTO")
     if not re.search(r"(申请|考|学|能开|可以开|哪些|什么)", question):
+        return None
+    # 用户点名了 70 岁以上禁驾的车型（D/E/C3/C4/C6），就不能笼统答"可以申请这 4 种"——
+    # 4 种里根本没有他问的那个，读起来像"可以"，实际是不可以。
+    # 交回 q_age_apply，它按车型给出"18 周岁以上、70 周岁以下"的准确上限。
+    banned = [c for c in extract_codes(question) if c in ("D", "E", "C3", "C4", "C6")]
+    if banned:
         return None
     return result(
         "**70 周岁以上可以申请以下 4 种准驾车型**（须通过记忆力、判断力、反应力等能力测试）：\n\n"
@@ -345,7 +358,7 @@ def q_age_drive(question: str) -> Optional[Dict]:
     if not m:
         return None
     # 必须是在问"能不能开 / 怎么办"，否则"70岁以上需要每年体检吗"会被抢答成驾驶限制
-    if not re.search(r"(能开|可以开|还能开|不能开|驾驶|开车|骑|上路|怎么办|如何处理|怎么处理|继续开|开)", question):
+    if not re.search(r"(能开|可以开|还能开|不能开|驾驶|开车|骑|上路|怎么办|如何处理|怎么处理|继续开|开|延长|延期)", question):
         return None
     age = int(m.group(1))
     codes = extract_codes(question)
@@ -393,16 +406,31 @@ def q_age_drive(question: str) -> Optional[Dict]:
 
     if code in FORBIDDEN_AT_63:
         if age >= 63:
-            lines.append(f"**不能。** 年龄在 63 周岁以上的，不得驾驶 {code}（{name}）。")
-            lines.append(f"应当：{DOWNGRADE_RULES.get(code, '换领小型汽车（C1）或小型自动挡汽车（C2）驾驶证')}。")
-            lines.append("")
-            lines.append("**唯一的延长途径**（第六十五条第一款）：")
-            lines.append("1. 必须在**年满 63 周岁前 1 年内**提出申请；")
-            lines.append("2. 须通过记忆力、判断力、反应力等能力测试（三力测试）；")
-            lines.append("3. 向驾驶证核发地或核发地以外的车辆管理所申请；")
-            lines.append("4. **延长期限最长不超过 3 年**（即最多驾驶到 66 周岁）。")
-            lines.append("")
-            lines.append("⚠️ 满 63 周岁后就不能再申请延长，必须卡在 62～63 岁这一年之内办理。")
+            # 用户若奔着"延期"来问，先正面回答延期这件事，再讲换证。
+            # 否则开头一句"不能"会被读成"不能延期"，而实际是
+            # "延长窗口已过、只能换证"——差一个字，结论观感完全不同。
+            if re.search(r"(延期|延长)", question):
+                lines.append("**不能再申请延长了。** 延长必须在**年满 63 周岁前 1 年内**提出，"
+                             f"你已经满 {age} 周岁，这个窗口已经过了。")
+                lines.append(f"**同时也不能再驾驶 {code}（{name}）。** "
+                             f"应当：{DOWNGRADE_RULES.get(code, '换领小型汽车（C1）或小型自动挡汽车（C2）驾驶证')}。")
+                lines.append("")
+                lines.append("持 A2 换领时，还可以保留 **C6（轻型牵引挂车）** 准驾车型——"
+                             "这是重型牵引挂车降级后唯一保留的牵引类资格。")
+                lines.append("")
+                lines.append("依据第六十五条第一款：63 周岁以上不得驾驶大型客车、重型牵引挂车等车型；"
+                             "经记忆力、判断力、反应力测试，可以在**年满 63 周岁前 1 年内**申请延长，最长 3 年。")
+            else:
+                lines.append(f"**不能。** 年龄在 63 周岁以上的，不得驾驶 {code}（{name}）。")
+                lines.append(f"应当：{DOWNGRADE_RULES.get(code, '换领小型汽车（C1）或小型自动挡汽车（C2）驾驶证')}。")
+                lines.append("")
+                lines.append("**唯一的延长途径**（第六十五条第一款）：")
+                lines.append("1. 必须在**年满 63 周岁前 1 年内**提出申请；")
+                lines.append("2. 须通过记忆力、判断力、反应力等能力测试（三力测试）；")
+                lines.append("3. 向驾驶证核发地或核发地以外的车辆管理所申请；")
+                lines.append("4. **延长期限最长不超过 3 年**（即最多驾驶到 66 周岁）。")
+                lines.append("")
+                lines.append("⚠️ 满 63 周岁后就不能再申请延长，必须卡在 62～63 岁这一年之内办理。")
         else:
             lines.append(f"**能。** {age} 周岁尚未达到 63 周岁，可以驾驶 {code}（{name}）。")
             lines.append("但需注意：年满 63 周岁后不得继续驾驶，须在 63 周岁前 1 年内经三力测试申请延长，最长 3 年。")
@@ -965,6 +993,32 @@ _HANDLERS = [
 
 _MULTI_DEMAND = ("并且", "还有", "另外", "同时", "顺便")
 
+# ── 制度必要条件守卫（2026-11-04 线上事故后加）──
+# 事实层靠"关键词命中"决定答哪一问，同一个词跨两个制度时必然答串，
+# 而且串出来的结论可能正好相反：
+#   延期换证（第七十五条）——延期期间**不得**驾驶；
+#   驾驶资格延期（第六十五条）——延长期间**可以**继续驾驶。
+# 这里登记"某事实族的必备要件"：问句里没有这个要件，就不许拿这个族回答，
+# 让调度继续往下找更合适的处理器，找不到就交回 RAG。
+# 加一条的成本是一行，比在每个处理器内部各写一遍排除条件可靠——
+# 处理器内部写法容易漏（本项目已有两次"改了里面忘了外面"的先例）。
+_FACT_REQUIRED = {
+    # 第七十五条以"客观不能"为要件：服兵役、出国（境）等导致无法按期办理。
+    # 用户直接说"延期换证/延期审验"这个术语的，也算要件齐全（那就是第七十五条的正式名称）。
+    "RENEW:DELAY": r"(服兵役|出国|出境|国外|境外|无法在规定时间|不能按期|无法按期|来不及"
+                   r"|延期换证|延期办理|延期审验)",
+}
+
+
+def _passes_required(fact: str, q: str) -> bool:
+    """制度要件校验：不满足就丢弃这个结果，继续试下一个处理器。"""
+    for key, need in _FACT_REQUIRED.items():
+        if fact == key or fact.startswith(key + ":"):
+            if not re.search(need, q):
+                print(f"[FactTable] 制度守卫拦下 {fact}：问句缺少该制度要件 {need}")
+                return False
+    return True
+
 
 def _finalize(r: Dict) -> Dict:
     """统一出口：数字表达规范化（十二个月→12个月等）。"""
@@ -1009,6 +1063,8 @@ def lookup(question: str, max_len: int = 44) -> Optional[Dict]:
             print(f"[FactTable] {fn.__name__} 查表出错: {e}")
             continue
         if r:
+            if not _passes_required(r.get("fact") or "", q):
+                continue
             r.setdefault("covers", frozenset(cov))
             r["match"] = fn.__name__
             return _finalize(r)
