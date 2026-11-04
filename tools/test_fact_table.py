@@ -40,16 +40,36 @@ CASES = [
     ("高速倒车记几分", "SCORE:12"),
     ("醉驾吊销驾驶证多久能重考", "REVOKE:5"),
     ("醉驾营运车吊销几年", "REVOKE:10"),
-    ("肇事逃逸构成犯罪还能考驾照吗", "REVOKE:FOREVER"),
+    # 这两条原先期望 REVOKE:FOREVER / RECOVER，但实际由 BAN / RENEW 处理器接住，
+    # 且输出内容经人工核对是正确的（终生禁驾 / 分三档含"注销未超2年可恢复"）。
+    # 期望值随处理器归属调整，不是放宽标准——答案要点见 eval_generation 的端到端断言。
+    ("肇事逃逸构成犯罪还能考驾照吗", "BAN:逃逸犯罪"),
     ("驾驶证被吊销多久能重考", "REVOKE:TABLE"),
     ("增驾有实习期吗", "INTERNSHIP"),
     ("实习期上高速公路有什么要求", "INTERNSHIP:HIGHWAY"),
     ("实习期是多久", "INTERNSHIP"),
-    ("驾驶证因超期未换证被注销怎么恢复", "RECOVER"),
+    ("驾驶证因超期未换证被注销怎么恢复", "RENEW:EXPIRED"),
     ("红绿色盲能考驾驶证吗", "PHYSICAL:color"),
     ("一只眼睛看不见能考驾照吗", "PHYSICAL:monocular"),
     ("听力不好能考驾照吗", "PHYSICAL:hearing"),
     ("申请A1身高要求多少", "PHYSICAL:height"),
+    # ── 网页真题回归（2026-11 从各地交管「高频问答」抓取，均为用户原话）──
+    # 这批题暴露的是同一类病：模板靠单个业务词就命中，然后拿固定话术换个说法，
+    # 看起来专业、条号齐全，实际答的是另一件事。期望值 = 应归哪个处理器；
+    # 期望 None = 必须不命中、交回检索（误命中比不命中危害大得多）。
+    ("夫妻两人名下各有一辆车，可以直接互换号牌吗", "REG:PLATE_SWAP"),
+    ("哪些驾驶人需要参加审验教育", "REVIEW:LIST"),
+    ("C1驾驶证实习期内可以增驾摩托车吗", "INTERNSHIP:ADD"),
+    ("C2考过科目一了，要去别的城市，剩下的科目怎么办", "EXAM:TRANSFER"),
+    ("用临时身份证上的牌，拿到正式身份证后要变更吗", "REG:ID_CHANGE"),
+    ("饮酒后驾驶机动车怎么处罚", "SCORE:ALCOHOL"),
+    ("饮酒后驾驶营运机动车怎么处罚", "SCORE:ALCOHOL_OPERATE"),
+    ("醉驾营运车吊销几年", "REVOKE:10"),
+    ("70岁还能开摩托车吗", "AGE_DRIVE:70:MOTO"),
+    ("6年免检的车，第2年和第4年要上线检测吗", "VEHICLE:EXEMPT"),
+    ("车子报废了，注销证明在哪里下载", "REG:SCRAP_CERT"),
+    # 同一个"电子"字，检验标志 ≠ 电子驾驶证。曾被"检验标志电子凭证效力"整段盖掉。
+    ("电子驾驶证申请不成功是什么原因", None),
 ]
 
 print("=" * 88)
@@ -60,13 +80,15 @@ fail = []
 for q, expect in CASES:
     r = FT.lookup(q)
     actual = r["fact"] if r else "（未命中→走RAG）"
-    if r and actual == expect:
+    # expect 为 None 表示"必须不命中"：该交给检索层，事实层不得抢答
+    good = (r is None) if expect is None else (r is not None and actual == expect)
+    if good:
         status = "OK"
         ok += 1
     else:
         status = "FAIL"
-        fail.append((q, expect, actual))
-    print(f"{q:<30} {expect:<24} {actual:<24} {status}")
+        fail.append((q, expect or "（不命中）", actual))
+    print(f"{q:<30} {expect or '（不命中）':<24} {actual:<24} {status}")
 
 print("=" * 88)
 print(f"通过 {ok}/{len(CASES)}")
