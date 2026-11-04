@@ -329,6 +329,10 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
 
         if fact:
             print(f"[RAGEngine] 事实表命中 {fact.get('fact')}，直接返回确定性答案")
+            # 事实层答案的数字是代码里写死的常量，理论上不会错，但模板拼接多了
+            # 也会串（历史上有过「10 年」写成「5 年」）。这里只做日志自检：
+            # 发现对不上就报出来，不改输出——事实层若被降级，等于丢掉最可靠的那条路。
+            self._audit_fact_numbers(fact["answer"], fact.get("fact"))
             return {
                 "answer": fact["answer"],
                 "sources": fact["sources"],
@@ -395,22 +399,14 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
         # 两次调用串行，实测单题 8.57s / 18.96s，其中第 2 遍独占 1.64~7.21s，
         # 必然击穿 callContainer 的 15s 硬上限。
         #
-        # 第二遍真正独有的价值只有一条：答案里的数字是否编造。其余职能（车型硬错误、
-        # 色盲口径、枚举截断、记分混淆、吊销≠注销）已由下方 _apply_guardrails 用
-        # 确定性正则覆盖，属于重复建设。故把「数字核对」改写为纯代码实现：
-        # 提取答案中带单位的法规数字，逐个检查是否在检索上下文出现，秒级完成且零成本。
-        verified_answer = draft_answer
-        ungrounded, total = self._check_numbers(draft_answer, context)
-        if ungrounded:
-            ratio = len(ungrounded) / total if total else 0
-            print(f"[RAGEngine] 数字核对：{len(ungrounded)}/{total} 个数字未在片段中找到依据 "
-                  f"({ratio:.0%}) -> {ungrounded[:6]}")
-            # 大面积无依据才提示用户（个别数字常因片段被截断而查不到，提示反而是噪音）
-            if total >= 3 and ratio >= 0.6:
-                verified_answer += (
-                    "\n\n【系统校验】本回答中部分数字未能与检索到的法规原文逐字对应，"
-                    "具体标准请以公安机关交通管理部门的最新口径为准。"
-                )
+        # 2026-11-04 二次改造：原实现拿答案去**本次检索片段**里找依据，片段被截断到
+        # 900 字，原文数字常在截断外 → 正确答案也查不到 → 只能放宽到「3 个以上且
+        # 六成无据才提示」，于是单个数字写错（500 元写成 200 元）永远拦不住。
+        # 现改为对**知识库全库数值索引**核对，且区分量纲（金额/期限/记分/百分比），
+        # 依据不再受检索切分影响，单个数写错就能抓到。
+        verified_answer, num_degrade = self._number_gate(draft_answer)
+        if num_degrade:
+            return self._fallback_from_context(filtered, "number")
 
         # 清理重复的"最终答案："标记（历史上验证环节会带出，保留以防模型自发生成）
         verified_answer = re.sub(r'\n+\s*最终答案\s*[:：]\s*', '\n\n', verified_answer)
@@ -520,6 +516,7 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
             "budget": "检索已完成，AI 整理超时。以下是为你在法规库中找到的原文：",
             "llm_error": "AI 整理暂时不可用。以下是为你在法规库中找到的原文：",
             "citation": "AI 生成的回答中法条引用与法规库原文对不上，已为你改为直接列出原文：",
+            "number": "AI 生成的回答中有多个数值在法规原文里找不到对应，为避免误导，已改为直接列出原文：",
         }
         parts = [f"**{heads.get(reason, '以下是为你在法规库中找到的法规原文：')}**"]
         # 取 3 条而不是 2 条：混合检索的排序在长尾问题上并不总准，
@@ -552,33 +549,56 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
             return {}
         return self._fallback_from_context(filtered, "budget")
 
-    # 答案中需要核对的法规数字：数值 + 计量单位
-    # 必须带单位才算"法规数字"——裸数字多是序号（"第一百二十三条""第 2 项"），核对它们没有意义
-    _NUM_WITH_UNIT = re.compile(
-        r"(?<![\d\.])(\d+(?:\.\d+)?)\s*"
-        r"(年|个月|月|日|天|个工作日|工作日|分|次|座|周岁|岁|米|厘米|度|%|％|公里|千米|吨|千克)"
-    )
+    # ── 数字核对 ──
+    # 老实现的量纲表与"是否出现在片段里"的判定已整体移到 number_guard（对全库索引核对），
+    # 这里只保留处置策略，避免两套口径并存。
+    @staticmethod
+    def _audit_fact_numbers(answer: str, tag: str = ""):
+        """事实层答案的数字体检：只报日志，不改输出。"""
+        try:
+            import number_guard
+            res = number_guard.index().check(answer)
+        except Exception:
+            return
+        if res["ungrounded"]:
+            print(f"[RAGEngine] ⚠ 事实层自检：{tag} 有 {len(res['ungrounded'])} 个数值"
+                  f"在法规原文中无对应 -> {[b['raw'] for b in res['ungrounded']]}")
 
-    def _check_numbers(self, answer: str, context: str):
-        """纯代码核对：答案里带单位的法规数字，是否能在检索上下文中找到依据。
+    def _number_gate(self, answer: str):
+        """数字核对闸门。返回 (答案, 是否需要整体降级为检索原文)。
 
-        替代原「第二遍 LLM 自我验证」中「数字必须与原文一致」这一条。
-        返回 (未落地数字列表, 数字总数)。
+        处置分两档，与引用对账同构：
+          · 1 个数字对不上 → 保留答案，末尾点名该数值（保留正文的可读性，
+            同时明确告诉用户"这个数别直接采信"）
+          · ≥2 个，或无据数占全部数字一半 → 整段数值不可信，不再修补，降级给原文
 
-        判定规则刻意宽松（只要上下文中出现过该数值就算有依据），因为片段已被截断，
-        原文数字常在截断之外；宁可漏报也不误报——误报会触发无意义的系统校验提示。
+        为什么单个也提示、不再要求"3 个以上且六成无据"：
+        依据源已换成知识库全库原文，不再受片段截断干扰，误报在 116 条已确认正确的
+        答案上是 0/627。在这个误报水平上，"单个错"没有理由放过——用户问罚款多少，
+        答成 200 元而法定是 500 元，一个数就足以误导。
         """
-        pairs = self._NUM_WITH_UNIT.findall(answer or "")
-        if not pairs:
-            return [], 0
-        ctx = context or ""
-        ungrounded = []
-        for val, unit in pairs:
-            # 宽松匹配：只认数值本身是否在上下文中出现过
-            if re.search(r"(?<![\d\.])" + re.escape(val) + r"(?![\d\.])", ctx):
-                continue
-            ungrounded.append(f"{val}{unit}")
-        return ungrounded, len(pairs)
+        try:
+            import number_guard
+        except Exception as e:
+            print(f"[RAGEngine] 数字核对模块不可用（跳过）: {e}")
+            return answer, False
+        try:
+            res = number_guard.index().check(answer)
+        except Exception as e:
+            print(f"[RAGEngine] 数字核对异常（跳过）: {e}")
+            return answer, False
+
+        bad, total = res["ungrounded"], res["total"]
+        if not bad:
+            return answer, False
+
+        ratio = len(bad) / total if total else 0
+        print(f"[RAGEngine] 数字核对：{len(bad)}/{total} 个数值在法规原文中无对应 "
+              f"({ratio:.0%}) -> {[b['raw'] for b in bad][:6]}")
+        if len(bad) >= 2 or ratio >= 0.5:
+            return answer, True
+        note = number_guard.render_note(bad)
+        return (answer + note if note else answer), False
 
     @staticmethod
     def _dedupe_paragraphs(text: str) -> str:
