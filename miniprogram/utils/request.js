@@ -2,8 +2,11 @@ const cfg = require('../config.js');
 
 /**
  * 统一请求层
- * 对外只暴露一个函数：ask(question) → Promise<payload>
- * payload: { success, blocks, fact_hit, sources, degraded? }
+ * 对外暴露：ask(question, history) → Promise<payload>
+ * payload: { success, blocks, fact_hit, sources, degraded?, resolved_question? }
+ *
+ * history 是最近几轮问答，用来让后端把「那 B2 呢」「要多久」这类追问补成完整问句。
+ * 不传就是单轮，行为与改造前完全一致。
  *
  * 以后若从云托管切回「备案域名 + wx.request」，只改这个文件，页面无感。
  */
@@ -20,8 +23,10 @@ function normalizeError(res) {
   return err;
 }
 
-function ask(question) {
+function ask(question, history) {
   const body = { question: question, format: 'blocks' };
+  // 第一轮不带历史：少传几百字节，也让后端直接走单轮快路径（不做改写）
+  if (history && history.length) body.history = history;
 
   return new Promise((resolve, reject) => {
     if (cfg.useCloud) {

@@ -37,11 +37,52 @@ Page({
     this.onSend();
   },
 
+  /* ---------- 组装多轮历史 ---------- */
+  /**
+   * 取最近 3 轮问答，交给后端做追问补全。
+   *
+   * 只带文本、不带 blocks/sources：后端拿它判断「上一句在讲什么」，
+   * 不需要细节。答案截断 150 字——整段答案会让请求体积翻倍，
+   * 且超出部分对判断话题没有帮助。
+   *
+   * 加载中/失败的消息跳过，否则会把占位内容当成真实回答发过去。
+   */
+  buildHistory() {
+    const MAX_MSGS = 6;      // 3 轮
+    const MAX_Q = 200;
+    const MAX_A = 150;
+    const out = [];
+    const msgs = this.data.messages || [];
+
+    for (let i = 0; i < msgs.length; i++) {
+      const m = msgs[i];
+      if (!m || m.loading || m.error) continue;
+
+      if (m.role === 'user') {
+        const t = (m.text || '').trim();
+        if (t) out.push({ role: 'user', content: t.slice(0, MAX_Q) });
+        continue;
+      }
+
+      if (m.role === 'ai') {
+        let t = (m.text || '').trim();
+        if (!t && m.blocks && m.blocks.length) t = blocksToText(m.blocks);
+        if (!t) continue;
+        out.push({ role: 'assistant', content: t.slice(0, MAX_A) });
+      }
+    }
+    return out.slice(-MAX_MSGS);
+  },
+
   /* ---------- 发送 ---------- */
   onSend() {
     const q = (this.data.input || '').trim();
     if (!q) return;
     if (this.data.sending) return;
+
+    // 必须在 concat 之前取历史：setData 之后 this.data.messages 已经含本轮问题，
+    // 再取会把同一句发两遍，模型容易以为是重复追问。
+    const history = this.buildHistory();
 
     const msgs = this.data.messages.concat([
       { id: nextId(), role: 'user', text: q },
@@ -56,7 +97,7 @@ Page({
       sending: true
     }, () => this.scrollBottom());
 
-    ask(q)
+    ask(q, history)
       .then((payload) => this.fillAi(aiIndex, payload))
       .catch((err) => {
         this.setData({

@@ -3,7 +3,7 @@ FastAPI 后端服务 —— 提供问答接口和简单前端
 """
 import os
 import sys
-from typing import Optional
+from typing import Dict, List, Optional
 
 # 确保 backend 目录在 Python 路径中（支持从项目根目录运行）
 _here = os.path.dirname(os.path.abspath(__file__))
@@ -268,6 +268,15 @@ class QueryRequest(BaseModel):
     question: str
     # both=answer+blocks（网页版用）；blocks=只回结构化块（小程序用，省一半流量）
     format: str = "both"
+    # 最近几轮对话，用于把「那 B2 呢」「要多久」这类追问补成完整问句。
+    # 结构：[{"role": "user"|"assistant", "content": "..."}]
+    # 不传 = 单轮，行为与改造前完全一致（老版本小程序不受影响）。
+    #
+    # 类型刻意用裸 List 而不是 List[Dict]：写成 List[Dict] 时 pydantic 会在进入
+    # 处理函数之前就做结构校验，前端一旦传了不合规元素整个请求 422——一句
+    # 追问格式不对就把整轮问答打挂，代价太大。这里收下任意结构，
+    # 由 context_rewrite._norm_history 自己清洗，脏元素直接丢掉。
+    history: List = []
 
 
 @app.post("/api/query")
@@ -335,7 +344,9 @@ def query(request: QueryRequest, http_request: Request):
         # 生成 10.0s 就降级，而外层还在等到 12s，等于白扔掉 2s 预算。
         # 现在改一处 QUERY_TIMEOUT，内外同步。
         gen_budget = max(6.0, QUERY_TIMEOUT - 0.8)
-        fut = _EXECUTOR.submit(lambda: rag_engine.query(q, budget=gen_budget))
+        hist = request.history or []
+        fut = _EXECUTOR.submit(
+            lambda: rag_engine.query(q, budget=gen_budget, history=hist))
         result = fut.result(timeout=QUERY_TIMEOUT)
     except concurrent.futures.TimeoutError:
         # 最后一道保险：正常情况下 RAGEngine 会按 gen_budget（=QUERY_TIMEOUT-0.8）降级返回检索原文，
@@ -399,6 +410,14 @@ def query(request: QueryRequest, http_request: Request):
     }
     if (request.format or "both").lower() != "blocks":
         payload["answer"] = answer          # 保留原字段：网页版仍在用
+    # 追问被补全时，把「系统理解成的问题」也回传。前端可以据此显示提示，
+    # 更常见的作用是排查「为什么它答的是另一件事」。没发生补全就不带这个字段。
+    if result.get("resolved_question"):
+        payload["resolved_question"] = result["resolved_question"]
+    if result.get("ctx_reason"):
+        # 追问没接上时的原因（超时/被校验拦下）。只在内部诊断用，前端可不渲染，
+        # 但没有它就只能靠猜「是没触发还是被拦了」。
+        payload["ctx_reason"] = result["ctx_reason"]
     return JSONResponse(payload)
 
 

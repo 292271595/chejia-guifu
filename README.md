@@ -87,7 +87,7 @@ python -m uvicorn main:app --host 0.0.0.0 --port 8000
 | 接口 | 方法 | 说明 |
 |------|------|------|
 | `/` | GET | 问答界面 |
-| `/api/query` | POST | 提交问题 `{"question": "..."}` |
+| `/api/query` | POST | 提交问题 `{"question": "...", "history": [...]}`；`history` 可选，最近几轮问答，用于把「那 B2 呢」「要多久」补成完整问句 |
 | `/api/status` | GET | 服务状态与知识库信息 |
 
 ## 技术栈

@@ -10,7 +10,7 @@ RAG问答引擎 —— 检索增强生成 + 确定性核对
 ⏱ 性能红线：云托管 callContainer 超时 15s，本引擎端到端必须 < 12s。
    历史实现串行调两次 LLM，实测 8.6~19.0s，已移除第二遍 LLM 验证。
 """
-from typing import List, Dict
+from typing import Dict, List, Optional
 import re
 import time
 import concurrent.futures
@@ -303,7 +303,59 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
             fut.cancel()
             raise TimeoutError(f"LLM 超出预算（{remaining:.1f}s 未返回）")
 
-    def query(self, user_question: str, top_k: int = 5, budget: float = 10.0) -> Dict:
+    def query(self, user_question: str, top_k: int = 5, budget: float = 10.0,
+              history: Optional[List[Dict]] = None) -> Dict:
+        """带多轮历史的查询入口。
+
+        「那 B2 呢」「要多久」这类追问单独拿出来是残句：事实层按关键词查不到
+        处理器，检索层也召回不到相关片段，用户体感就是「它记不住上一句」。
+
+        所以先把残句补成独立问句，再交给 _query_impl 走原来的四层。顺序不能反——
+        补全放在检索之后没意义，那时检索已经偏了。
+
+        改写失败 / 超时 / 校验不通过，一律退回原句，主流程无感知
+        （见 context_rewrite 的三道防幻觉校验）。
+
+        预算要扣减：改写花掉的时间从生成预算里出，否则总耗时变成
+        「改写 2s + 生成 12s」= 14s，贴着 callContainer 15s 硬上限。
+        """
+        t0 = time.time()
+        effective_q = user_question
+        resolved = False
+        ctx_reason = ""
+
+        if history:
+            try:
+                import context_rewrite
+                r = context_rewrite.resolve(user_question, history, self.client,
+                                            self.model, timeout=3.0)
+                if r.get("resolved"):
+                    effective_q = r["question"]
+                    resolved = True
+                    print(f"[RAGEngine] 追问补全 {user_question!r} -> {effective_q!r}"
+                          f"（{r.get('sec', 0):.2f}s）")
+                elif not r.get("skipped"):
+                    # 没被跳过却没成：超时或校验拒收。这句一定要打日志——
+                    # 表现上就是「追问没接上」，不打日志根本看不出是被拦还是没触发。
+                    ctx_reason = r.get("reason", "")
+                    print(f"[RAGEngine] 追问补全未生效：{ctx_reason}")
+            except Exception as e:
+                ctx_reason = f"{type(e).__name__}: {e}"[:80]
+                print(f"[RAGEngine] 追问补全异常（忽略）: {e}")
+
+        # 改写耗时从总预算里扣，留至少 3 秒给生成——低于 3 秒不如直接降级原文
+        spent = time.time() - t0
+        out = self._query_impl(effective_q, top_k=top_k,
+                               budget=max(3.0, budget - spent))
+        if resolved:
+            # 告诉前端「系统理解成了什么」。前端不渲染也不影响功能，纯诊断与透明用。
+            out["resolved_question"] = effective_q
+        elif ctx_reason:
+            out["ctx_reason"] = ctx_reason
+        return out
+
+
+    def _query_impl(self, effective_q: str, top_k: int = 5, budget: float = 10.0) -> Dict:
         """
         执行 RAG 查询（单遍生成 + 代码核对）
         返回: {"answer": "...", "sources": [...]}
@@ -323,7 +375,7 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
         fact = None
         try:
             import fact_table
-            fact = fact_table.lookup(user_question)
+            fact = fact_table.lookup(effective_q)
         except Exception as e:
             print(f"[RAGEngine] 事实表查询异常，回退 RAG: {e}")
 
@@ -338,12 +390,12 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
             # 事实层按关键词路由，问句被送错处理器时会用确定性的口吻答出另一个制度，
             # 而答案本身语法、法条、格式全正常（2026-11 事故：问 63 岁 A2 能否延期
             # 继续驾驶，答成第七十五条延期换证）。这种错只能靠语义判断发现。
-            verdict = self._review_fact(user_question, fact, deadline)
+            verdict = self._review_fact(effective_q, fact, deadline)
             if verdict.get("verdict") == "WRONG":
                 # 不重答：实测转检索生成耗时 5~10s，一半超时降级，答案不升反降
                 # （tools/exp3_recheck_via_rag.py）。改为退回法规原文，宁可难读不可错答。
                 try:
-                    sr = self.vector_store.search(user_question, top_k=3)
+                    sr = self.vector_store.search(effective_q, top_k=3)
                     filtered = [r for r in (sr or []) if r.get("score", 0) >= 0.05]
                 except Exception as e:
                     filtered = []
@@ -382,10 +434,10 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
         # ─── 防线一之前：口语 → 法规术语改写 ───
         # 知识库是法规原文用语，用户说的是车圈口语（转籍/过户/解押/滞纳金），
         # 字面不重叠会导致漏召回，这里补上正式术语再检索。
-        search_query = user_question
+        search_query = effective_q
         try:
             import glossary
-            search_query, gloss_hits = glossary.expand(user_question)
+            search_query, gloss_hits = glossary.expand(effective_q)
             if gloss_hits:
                 print(f"[RAGEngine] 术语改写命中 {gloss_hits}")
         except Exception as e:
@@ -414,7 +466,7 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
         # 避免模型在长上下文里被相似但不适用的片段带偏。
         try:
             import fact_table
-            hint = fact_table.build_fact_hint(user_question)
+            hint = fact_table.build_fact_hint(effective_q)
             if hint:
                 context = hint + "\n\n" + context
                 print("[RAGEngine] 已注入确定性事实作为权威依据")
@@ -422,10 +474,10 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
             print(f"[RAGEngine] 事实提示注入失败（忽略）: {e}")
 
         # ─── 防线二：第一遍生成 —— 强制标注来源 ───
-        gen_prompt = self.system_prompt_template.replace("{context}", context).replace("{question}", user_question)
+        gen_prompt = self.system_prompt_template.replace("{context}", context).replace("{question}", effective_q)
 
         try:
-            draft_answer = self._call_llm_until(gen_prompt, user_question,
+            draft_answer = self._call_llm_until(gen_prompt, effective_q,
                                                 max_tokens=750, deadline=deadline)
         except TimeoutError as e:
             print(f"[RAGEngine] 生成超时（{e}），降级为检索原文")
@@ -469,7 +521,7 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
 
         # ─── 防线四：确定性护栏（正则后处理）───
         # 弥补小模型在长约束 prompt 下偶尔走神，对法规硬错误做强制纠正
-        verified_answer = self._apply_guardrails(verified_answer, user_question)
+        verified_answer = self._apply_guardrails(verified_answer, effective_q)
 
         # ─── 防线五：法条引用对账（编造条号的最后一道闸门）───
         # 前面四道防线都在管"说了什么"，这道管"凭什么是这么说的"。
