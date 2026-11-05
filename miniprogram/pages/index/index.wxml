@@ -81,9 +81,26 @@
 
               </block>
 
-              <!-- 降级提示 -->
-              <view class="degraded" wx:if="{{item.degraded}}">
+              <!-- 降级提示（歧义候选不走这条：它有自己的按钮区） -->
+              <view class="degraded" wx:if="{{item.degraded && item.degradedType !== 'ctx_ambiguous'}}">
                 <text>回答较慢，已先给出要点。可把问题拆短再问一次。</text>
+              </view>
+
+              <!-- 追问歧义：列候选，点一下直接问 -->
+              <view class="clarify" wx:if="{{item.clarify.length > 0}}">
+                <view class="clarify-tip">点一个直接问：</view>
+                <view class="clarify-wrap">
+                  <view
+                    class="chip chip-clarify"
+                    wx:for="{{item.clarify}}"
+                    wx:for-item="c"
+                    wx:key="q"
+                    bindtap="onQuick"
+                    data-q="{{c.q}}"
+                  >
+                    <text>{{c.label}}</text>
+                  </view>
+                </view>
               </view>
 
               <!-- 来源 -->

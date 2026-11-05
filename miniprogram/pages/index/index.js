@@ -121,6 +121,10 @@ Page({
     const ok = payload && payload.success !== false;
     const blocks = (payload && payload.blocks) || [];
     const sources = (payload && payload.sources) || [];
+    // 追问有歧义时后端会给出几个候选问法（例如「要多久」在「C1 能开什么车」
+    // 「那 B2 呢」之后到底问什么）。渲染成按钮让用户点一下，
+    // 比让用户自己重说一遍要快，也不会因为措辞不同又没听懂。
+    const clarify = (payload && payload.clarify) || [];
     const node = ok
       ? {
           id: this.data.messages[index].id,
@@ -129,6 +133,8 @@ Page({
           sources,
           showSources: false,
           degraded: !!(payload && payload.degraded),
+          degradedType: (payload && payload.degraded) || '',
+          clarify,
           factHit: (payload && payload.fact_hit) || ''
         }
       : {
@@ -137,6 +143,7 @@ Page({
           blocks,
           sources: [],
           showSources: false,
+          clarify: [],
           error: (payload && payload.message) || '服务暂时没有响应，稍后再试。'
         };
 

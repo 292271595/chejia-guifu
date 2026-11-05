@@ -326,23 +326,59 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
         ctx_reason = ""
 
         if history:
+            # ── L0：规则补全（毫秒级，不调模型）──
+            # 「那 B2 呢」只是换主语、「要多久」只是换谓词，字符串替换就够。
+            # 这一层把模型调用量砍掉一大截，而模型调用正是超时的唯一来源：
+            # 实测模型改写有 10%~20% 会撞上 3 秒硬超时，超时那轮就退回单轮。
+            # 规则补出来的实体全部来自用户原话，不存在幻觉，也不可能超时。
             try:
-                import context_rewrite
-                r = context_rewrite.resolve(user_question, history, self.client,
-                                            self.model, timeout=3.0)
-                if r.get("resolved"):
-                    effective_q = r["question"]
+                import ctx_rules
+                rr = ctx_rules.rule_resolve(user_question, history)
+                if rr.get("status") == "resolved":
+                    effective_q = rr["question"]
                     resolved = True
-                    print(f"[RAGEngine] 追问补全 {user_question!r} -> {effective_q!r}"
-                          f"（{r.get('sec', 0):.2f}s）")
-                elif not r.get("skipped"):
-                    # 没被跳过却没成：超时或校验拒收。这句一定要打日志——
-                    # 表现上就是「追问没接上」，不打日志根本看不出是被拦还是没触发。
-                    ctx_reason = r.get("reason", "")
-                    print(f"[RAGEngine] 追问补全未生效：{ctx_reason}")
+                    print(f"[RAGEngine] 追问补全[{rr.get('rule')}] {user_question!r}"
+                          f" -> {effective_q!r}")
+                elif rr.get("status") == "ambiguous":
+                    # 上下文凑不出唯一对象（典型：先问「C1 能开什么车」，
+                    # 再问「那 B2 呢」，再问「要多久」）。人也要再问一句才清楚，
+                    # 系统猜一个再答只会答错且看不出来。把候选摆出来让用户点。
+                    print(f"[RAGEngine] 追问歧义 {user_question!r}：{rr.get('reason')}")
+                    return {
+                        "answer": (
+                            "**这句我不猜，怕猜错。**\n\n"
+                            f"「{user_question}」在这个上下文里能指好几件事，"
+                            "答案差得很远。点一下你要问的那个，我直接给你流程和条文："
+                        ),
+                        "sources": [],
+                        # 与 ctx_unresolved 分开统计：那个是没补上，
+                        # 这个是补不上——后者有候选可点，体验完全不同
+                        "degraded": "ctx_ambiguous",
+                        "clarify": rr.get("candidates") or [],
+                        "ctx_reason": rr.get("reason", ""),
+                    }
             except Exception as e:
-                ctx_reason = f"{type(e).__name__}: {e}"[:80]
-                print(f"[RAGEngine] 追问补全异常（忽略）: {e}")
+                print(f"[RAGEngine] 规则补全异常（忽略）: {e}")
+
+            # ── L1：模型补全（形态复杂的才走到这里）──
+            if not resolved:
+                try:
+                    import context_rewrite
+                    r = context_rewrite.resolve(user_question, history, self.client,
+                                                self.model, timeout=4.0)
+                    if r.get("resolved"):
+                        effective_q = r["question"]
+                        resolved = True
+                        print(f"[RAGEngine] 追问补全[模型] {user_question!r} -> {effective_q!r}"
+                              f"（{r.get('sec', 0):.2f}s）")
+                    elif not r.get("skipped"):
+                        # 没被跳过却没成：超时或校验拒收。这句一定要打日志——
+                        # 表现上就是「追问没接上」，不打日志根本看不出是被拦还是没触发。
+                        ctx_reason = r.get("reason", "")
+                        print(f"[RAGEngine] 追问补全未生效：{ctx_reason}")
+                except Exception as e:
+                    ctx_reason = f"{type(e).__name__}: {e}"[:80]
+                    print(f"[RAGEngine] 追问补全异常（忽略）: {e}")
 
         # 判定是残句、但补全失败（超时 / 被校验拒收）：
         # 不能把「那 35 分呢」原样丢进检索层。这种句子向量上跟任何法条都不接近，

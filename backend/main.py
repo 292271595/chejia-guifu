@@ -422,6 +422,11 @@ def query(request: QueryRequest, http_request: Request):
         # 追问补全失败时引擎会直接回引导话术（degraded=ctx_unresolved），
         # 不透传的话前端会当成正常回答，样式和语气都不对。
         payload["degraded"] = result["degraded"]
+    if result.get("clarify"):
+        # 追问有歧义（degraded=ctx_ambiguous）时给出的候选问法。
+        # 前端渲染成按钮，点一下直接发问——比「请把问题说完整」友好得多，
+        # 也不用让用户猜系统到底想要什么措辞。
+        payload["clarify"] = result["clarify"]
     return JSONResponse(payload)
 
 

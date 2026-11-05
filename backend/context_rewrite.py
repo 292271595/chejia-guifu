@@ -53,13 +53,19 @@
 import os
 import re
 import time
+import concurrent.futures
 from typing import Dict, List, Optional
 
 # 带上几轮历史：3 轮足够覆盖「那 B2 呢」「要多久」这类紧邻追问，
 # 再多只是白占 token，也更可能把模型带偏到很久之前的话题。
 MAX_TURNS = 3
-# 历史里答案只留开头：追问靠的是「上一句在讲什么」，不是完整答案。
-MAX_HIST_CHARS = 120
+# 历史里问句和答案的截断长度不同：
+#   问句是「上一句在问什么」的唯一线索，而且规则层要从里面抽车型和动作，
+#   截狠了 R1/R2 就抽不出东西，所以给到 200 字（小程序发的也是 200）。
+#   答案只用来判断话题走向，60 字够；整段答案会让 prompt 翻倍，
+#   token 越多首 token 延迟越大，而延迟正是超时的来源。
+_MAX_USER_CHARS = 200
+_MAX_ASST_CHARS = 60
 # 补全后的问句不该比原句长太多，超过这个长度基本是模型在自行作答
 MAX_RESOLVED_CHARS = 60
 
@@ -84,6 +90,23 @@ _VAGUE_TAILS = (
     "可以吗", "行不行", "行吗", "能吗", "要不要", "怎么办", "怎么弄", "咋办",
 )
 
+# 主体词：不是"业务动作"，而是"这件事挂在什么东西上"。
+# 为什么单独列：`_BIZ_WORDS` 收的是动作（换证/记分/年检），而「B2 考驾照要多久」
+# 的动作是「考」，主体是「驾照」，两个表都不含「驾照」——
+# 结果这句自带主体的完整问句被当成残句，白跑一次改写（还可能被改坏）。
+# 8~10 字、自带主体的短问句在口语里很常见，必须能自己立住。
+_SUBJECT_WORDS = (
+    "驾照", "驾驶证", "行驶证", "登记证书", "机动车", "车辆", "车牌",
+    "号牌", "科目一", "科目二", "科目三", "科目四", "车主",
+)
+
+
+def _has_subject(q: str) -> bool:
+    """这句有没有自带主体（车型 / 业务动作 / 挂在什么证件车辆上）。"""
+    return (bool(_CODE_RE.search(q or ""))
+            or any(w in q for w in _BIZ_WORDS)
+            or any(w in q for w in _SUBJECT_WORDS))
+
 
 def _norm_history(history: Optional[List[Dict]]) -> List[Dict]:
     """清洗历史：只留 role/content，剥空白，答案截断，最多 MAX_TURNS 轮。"""
@@ -99,7 +122,8 @@ def _norm_history(history: Optional[List[Dict]]) -> List[Dict]:
         content = str(item.get("content") or "").strip()
         if not content:
             continue
-        out.append({"role": role, "content": content[:MAX_HIST_CHARS]})
+        cap = _MAX_USER_CHARS if role == "user" else _MAX_ASST_CHARS
+        out.append({"role": role, "content": content[:cap]})
     # 只有 assistant 没有 user 的历史没有承接对象（比如历史被裁掉了问句），
     # 拿它去改写只会让模型对着一段自说自话乱猜。
     if not any(x["role"] == "user" for x in out):
@@ -117,10 +141,11 @@ def need_resolve(question: str, history: Optional[List[Dict]]) -> bool:
     三种情况算立不住：
       · 句首有指代/承接词（那 B2 呢 / 还有呢 / 那要多久）
       · 以「呢」收尾（B2 呢）
-      · 极短（≤6 字）且不含业务词（要多久 / 可以吗）
+      · 极短（≤6 字）且不含主体（要多久 / 可以吗）
 
     反例（不改写）：
       「醉驾几年能考」7 字，含「醉驾」业务词 → 自己能立住
+      「B2 考驾照要多久」8 字，含车型+「驾照」主体 → 自己能立住
       「C1 驾驶证过期了怎么换证」含车型+换证 → 完整
     """
     h = _norm_history(history)
@@ -131,7 +156,8 @@ def need_resolve(question: str, history: Optional[List[Dict]]) -> bool:
     if not q:
         return False
 
-    has_biz = any(w in q for w in _BIZ_WORDS)
+    # 有主体（车型/业务动作/证件车辆）才算「自己立得住」
+    has_subj = _has_subject(q)
 
     # 句首指代本身就是承接上文的强信号。这时**不再要求句子里没有业务词**——
     # 实测「那醉驾呢」「那超速 50% 以上呢」都含业务词，但业务词只交代了话题，
@@ -147,16 +173,16 @@ def need_resolve(question: str, history: Optional[List[Dict]]) -> bool:
 
     # 「呢」在口语里几乎只用于追问（「B2 呢」「醉驾呢」），完整问句很少这样收尾。
     # 例外是带完整业务主体的长句，如「驾驶员体检要带什么呢」——主体明确，不必补。
-    if core0.endswith("呢") and not (has_biz and len(core0) > 10):
+    if core0.endswith("呢") and not (has_subj and len(core0) > 10):
         return True
 
     # 极短句：去掉标点后不足 7 个字，且没有任何业务词，基本只能是追问
     core = re.sub(r"[\s，。？！、,.?!~…]", "", q)
-    if len(core) <= 6 and not has_biz:
+    if len(core) <= 6 and not has_subj:
         return True
 
     # 纯疑问尾巴（「大概要多久」这种前面只有语气词的）
-    if len(core) <= 10 and not has_biz:
+    if len(core) <= 10 and not has_subj:
         for tail in _VAGUE_TAILS:
             if tail in core:
                 return True
@@ -203,6 +229,21 @@ def _build_prompt(question: str, history: List[Dict]) -> str:
 _TIME_WORDS = ("多久", "多长时间", "多少天", "几个月", "几年", "几天", "多少年", "什么时候")
 _MONEY_WORDS = ("多少钱", "多少费用", "费用", "收费", "花多少")
 
+# 「可计时动作」：法规里真有期限、能被「多久」修饰的业务动作。
+# 故意不收「开」「用」「有」这类泛动词——「C1 能开多久」不是成立的问题，
+# 放进来就等于放行语义漂移。ctx_rules 复用同一份表，避免两处判据打架。
+_DURABLE_ACTIONS = (
+    "换证", "换领", "换发", "核发", "补证", "补办", "年检", "检验", "审验",
+    "申领", "增驾", "满分", "学习", "记分", "记分周期", "实习期", "有效期",
+    "过户", "转移", "注销", "报废", "恢复", "延期", "抵押", "解押",
+    "变更登记", "变更备案", "事故", "考试", "考", "办理", "预约", "体检",
+    "缴纳", "处理", "转籍", "迁入", "迁出",
+)
+
+# 法规语料里不成立的问法：驾驶证讲有效期、准驾范围讲车型，
+# 没有「能开多久」这个概念。原句和历史都没这么说时，出现即是模型自造。
+_NO_TIME_PHRASE = re.compile(r"(?:能|可以|可|会)开\s*多久")
+
 # 判断「改写结果还是个问句」用。刻意放宽：只要出现任一疑问成分就算，
 # 宁可放过一个不太好的改写，也不要误杀正常补全。
 _Q_WORD = re.compile(
@@ -219,6 +260,11 @@ def _intent(text: str) -> set:
     if any(w in t for w in _MONEY_WORDS):
         tags.add("money")
     return tags
+
+
+def _has_durable(text: str) -> bool:
+    """句子里有没有真能计时的动作/对象。"""
+    return any(w in (text or "") for w in _DURABLE_ACTIONS)
 
 
 def _digits(text: str) -> set:
@@ -287,20 +333,37 @@ def validate(original: str, resolved: str, history: List[Dict]) -> (bool, str):
     if lost:
         return False, f"丢掉了原有的提问点 {sorted(lost)}"
 
+    hist_text = " ".join(h["content"] for h in history)
+
+    # 第五道半：时间问句必须锚定在可计时的动作上。
+    # 实测「要多久」（上文是「C1 能开什么车」「那 B2 呢」）被补成
+    # 「C1 小型汽车需要多久才能开」——还问时间、没有新增实体、仍是问句，
+    # 前面五道全过，意思却从「考/增驾要多久」漂成了「能开多久」。
+    # 后者在法规里不成立，照它检索只会捞回无关条文，而用户看不出错在哪。
+    # 判据：既然还在问时间，结果里就必须有一个真能计时的对象。
+    if "time" in _intent(original) and not _has_durable(original) \
+            and not _has_durable(r):
+        return False, "时间问句没锚定到可计时动作（疑似语义漂移）"
+
+    # 「能开多久」句式零容忍：原句和历史都没这么说过，就是模型自造的。
+    if _NO_TIME_PHRASE.search(r) and not _NO_TIME_PHRASE.search(original) \
+            and not _NO_TIME_PHRASE.search(hist_text):
+        return False, "用了「能开多久」这类法规里不成立的问法"
+
     # 数字不得新增
-    allowed_digits = _digits(original) | _digits(" ".join(h["content"] for h in history))
+    allowed_digits = _digits(original) | _digits(hist_text)
     extra_digits = _digits(r) - allowed_digits
     if extra_digits:
         return False, f"新增数字 {sorted(extra_digits)}"
 
     # 中文数量词不得新增（阿拉伯数字已在上一步拦下）
-    allowed_cn = _cn_quantities(original) | _cn_quantities(" ".join(h["content"] for h in history))
+    allowed_cn = _cn_quantities(original) | _cn_quantities(hist_text)
     extra_cn = _cn_quantities(r) - allowed_cn
     if extra_cn:
         return False, f"新增期限/数量 {sorted(extra_cn)}"
 
     # 车型码不得新增
-    allowed_codes = _codes(original) | _codes(" ".join(h["content"] for h in history))
+    allowed_codes = _codes(original) | _codes(hist_text)
     extra_codes = _codes(r) - allowed_codes
     if extra_codes:
         return False, f"新增车型 {sorted(extra_codes)}"
@@ -314,8 +377,42 @@ def enabled() -> bool:
     return v not in ("off", "0", "false", "no")
 
 
+# 改写用的硬超时执行器。和 rag_engine._LLM_EXECUTOR 同理，单独一个池，
+# 免得改写卡住的线程把生成侧的槽位占掉。
+_RW_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=8,
+                                                 thread_name_prefix="ctxrw")
+
+
+def _chat_hard_timeout(client, model: str, prompt: str, timeout: float) -> str:
+    """带墙钟硬超时的改写调用。
+
+    ⚠️ openai SDK 的 `timeout` 参数是 httpx 的 read timeout，语义是
+    「两次数据块之间的最大间隔」，不是整次请求的时长。服务端缓慢但持续
+    吐字时，设 3 秒可以跑成 6 秒——改写这一环原本就栽在这里：看起来设了
+    3 秒上限，实际偶发 5~6 秒，正好吃掉本该留给生成的时间。
+    只有 `future.result(timeout=)` 才是真的时间上限。
+    """
+    fut = _RW_POOL.submit(
+        client.with_options(timeout=max(0.8, timeout), max_retries=0
+                            ).chat.completions.create,
+        model=model,
+        messages=[
+            {"role": "system", "content": "你只负责补全追问，输出一句话，不做任何解释。"},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.0,
+        max_tokens=60,
+    )
+    try:
+        resp = fut.result(timeout=timeout)
+    except concurrent.futures.TimeoutError:
+        fut.cancel()
+        raise TimeoutError(f"改写超过 {timeout:.1f}s")
+    return (resp.choices[0].message.content or "").strip()
+
+
 def resolve(question: str, history: Optional[List[Dict]], client, model: str,
-            timeout: float = 3.0) -> Dict:
+            timeout: float = 4.0) -> Dict:
     """把追问补成独立问句。
 
     返回：
@@ -344,16 +441,7 @@ def resolve(question: str, history: Optional[List[Dict]], client, model: str,
 
     t0 = time.time()
     try:
-        resp = client.with_options(timeout=max(0.8, timeout), max_retries=0).chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": "你只负责补全追问，输出一句话，不做任何解释。"},
-                {"role": "user", "content": _build_prompt(question, h)},
-            ],
-            temperature=0.0,
-            max_tokens=80,
-        )
-        txt = (resp.choices[0].message.content or "").strip()
+        txt = _chat_hard_timeout(client, model, _build_prompt(question, h), timeout)
     except Exception as e:
         res["sec"] = time.time() - t0
         res["reason"] = f"{type(e).__name__}: {e}"[:100]

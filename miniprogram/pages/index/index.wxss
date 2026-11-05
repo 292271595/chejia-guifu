@@ -243,6 +243,24 @@
   color: #94651A;
 }
 
+/* 追问歧义候选：把「要问哪件事」变成一次点击 */
+.clarify {
+  margin-top: 18rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx dashed #E3EAF2;
+}
+
+.clarify-tip {
+  font-size: 24rpx;
+  color: #8A94A6;
+  margin-bottom: 14rpx;
+}
+
+.clarify-wrap {
+  display: flex;
+  flex-wrap: wrap;
+}
+
 /* ============ 来源 ============ */
 .src {
   margin-top: 20rpx;
@@ -344,6 +362,13 @@
   margin: 0 16rpx 16rpx 0;
   font-size: 26rpx;
   color: #2E4A66;
+}
+
+/* 必须写在 .chip 之后：同为单类选择器，靠顺序覆盖上一条的白底。 */
+.chip-clarify {
+  background: #F2F7FC;
+  border: 1rpx solid #CFE0F0;
+  color: #1F5C8F;
 }
 
 .chat-tail {
