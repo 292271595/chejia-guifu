@@ -264,7 +264,9 @@ def q_overload_pax(q: str) -> Optional[Dict]:
             f"**超员 {pct}% 在现行记分办法中没有对应记分条款，不记分。**\n\n"
             f"{OVERLOAD_PAX_DESC[cls]}{pct}%，低于最低记分档（{OVERLOAD_PAX[cls][0][0]}%）。\n\n"
             "注意：不记分不等于不处罚，仍可按《道路交通安全法》处以罚款。",
-            [source(f"{LAW}", "超员记分最低档为百分之二十")], "SCORE:0")
+            [source(f"{LAW}第七条",
+                    "根据交通违法行为的严重程度，一次记分的分值为12分、9分、6分、3分、1分")],
+            "SCORE:0")
     desc = f"{OVERLOAD_PAX_DESC[cls]}{pct}%" if pct else OVERLOAD_PAX_DESC[cls]
     return _score_result(score, law, desc)
 
@@ -321,7 +323,9 @@ def q_overspeed(q: str) -> Optional[Dict]:
             f"**超速 {pct}% 在该道路类型与车辆类别下没有对应记分条款，不记分。**\n\n"
             "现行记分办法对超速按「道路类型 × 车辆类别 × 比例」分档，未达到最低分档的不记分，"
             "但仍可依法处以罚款（《道路交通安全法》第九十九条）。",
-            [source(LAW, "超速记分最低档为百分之十或百分之二十")], "SCORE:0")
+            [source(f"{LAW}第七条",
+                    "根据交通违法行为的严重程度，一次记分的分值为12分、9分、6分、3分、1分")]
+            , "SCORE:0")
     road_name = "高速公路/城市快速路" if road == "highway" else "高速公路、城市快速路以外的道路"
     cls_name = "校车、中型以上载客载货汽车、危险物品运输车辆" if cls == "ops" else "其他机动车"
     return _score_result(score, law, f"驾驶{cls_name}在{road_name}上行驶超过规定时速{pct}%")
@@ -530,12 +534,17 @@ def q_study_reduce(q: str) -> Optional[Dict]:
         head = f"**不能。** {blocked}。\n\n"
     else:
         head = "**学法减分：一个记分周期内累计最高扣减 6 分。**\n\n"
-    return result(
-        head + detail,
-        [source("《道路交通安全违法行为记分管理办法》第二十五条",
-                "参加公安机关交通管理部门组织的交通安全教育并达到规定要求的，可以申请在机动车驾驶人"
-                "现有累积记分分值中扣减记分。在一个记分周期内累计最高扣减6分", SRC_FILE)],
-        "SCORE:STUDY_REDUCE")
+
+    # 依据要跟着结论走：问的是「能不能」，结论落在第二十六条（不予受理），
+    # 却只挂第二十五条（可以申请）的话，用户按依据去翻条文会找不到自己的情形。
+    srcs = [source("《道路交通安全违法行为记分管理办法》第二十五条",
+                   "参加公安机关交通管理部门组织的交通安全教育并达到规定要求的，可以申请在机动车驾驶人"
+                   "现有累积记分分值中扣减记分。在一个记分周期内累计最高扣减6分", SRC_FILE)]
+    if blocked:
+        srcs.insert(0, source("《道路交通安全违法行为记分管理办法》第二十六条",
+                              "但有以下情形之一的，不予受理：……（三）机动车驾驶证在实习期内，"
+                              "或者机动车驾驶证逾期未审验，或者机动车驾驶证被扣留、暂扣期间的", SRC_FILE))
+    return result(head + detail, srcs, "SCORE:STUDY_REDUCE")
 
 
 def q_score(question: str) -> Optional[Dict]:

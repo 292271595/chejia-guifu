@@ -125,7 +125,8 @@ def main():
             layer = "fact" if fact else "rag"
             r = engine.query(text, top_k=6, budget=12)
             answer = r["answer"]
-            titles = [((s.get("metadata") or {}).get("title") or "") for s in r.get("sources", [])]
+            titles = [((s.get("metadata") or {}).get("title") or s.get("title") or "")
+                      for s in r.get("sources", [])]
             degraded = bool(r.get("degraded"))
             review = (r.get("fact_review") or {}).get("verdict")
             if review == "WRONG":
