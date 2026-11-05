@@ -18,8 +18,12 @@ from typing import Dict, List, Tuple
 
 _GLOSSARY_PATH = os.getenv(
     "GLOSSARY_PATH",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                 "data", "glossary_colloquial.json"),
+    # 与 citation_index / number_index 放一起，都归 backend/kb_index/。
+    # 曾经放在 data/ 下，而 .dockerignore 排除了 data/ 和 *.md，
+    # 结果镜像里没有这个文件：载入失败只打一行日志就关闭改写，不崩不报错，
+    # 表现为"口语问法答得差"，线上查了几天也未必发现。运行时资源一律放 backend/。
+    os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                 "kb_index", "glossary_colloquial.json"),
 )
 
 _entries: List[Dict] | None = None

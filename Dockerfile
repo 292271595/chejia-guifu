@@ -29,6 +29,12 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY backend/ /app/backend/
 COPY chroma_db/ /app/chroma_db/
 COPY frontend/ /app/frontend/
+# 运行时用到的三个索引/对照表都在 backend/kb_index/ 下，随上面 COPY backend/ 一起进镜像：
+#   citation_index.json      引用对账白名单
+#   number_index.json        数字核对全库数值索引
+#   glossary_colloquial.json 口语术语改写表
+# 它们缺了都不会报错，只会静默关掉对应的那一层校验，所以刻意放在 backend/ 里——
+# 只要 COPY backend/ 在，就不可能漏。别再把这类文件放到 data/（.dockerignore 排除了它）。
 
 WORKDIR /app/backend
 EXPOSE 80

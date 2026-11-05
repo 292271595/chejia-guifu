@@ -14,7 +14,7 @@ import json
 import os
 
 PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                    "data", "glossary_colloquial.json")
+                    "backend", "kb_index", "glossary_colloquial.json")
 
 NEW = [
     dict(id="penalty-run-red-light", group="违法处罚",

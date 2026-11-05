@@ -131,12 +131,29 @@ def init_engine():
         print("=" * 60)
 
     try:
-        rag_engine = create_rag_engine(
-            PERSIST_DIR, API_BASE, API_KEY, MODEL,
-            embed_backend=EMBED_BACKEND,
-            embed_api_key=EMBED_API_KEY,
-            embed_api_base=EMBED_API_BASE,
-        )
+        try:
+            rag_engine = create_rag_engine(
+                PERSIST_DIR, API_BASE, API_KEY, MODEL,
+                embed_backend=EMBED_BACKEND,
+                embed_api_key=EMBED_API_KEY,
+                embed_api_base=EMBED_API_BASE,
+            )
+        except ValueError as ee:
+            # 只兜「云端嵌入缺 Key」这一种：漏配 EMBED_API_KEY 不该让整个服务全挂。
+            # 事实层根本不走向量，纯 BM25 也能把法条原文检索出来，用户至少有东西看；
+            # 而服务起不来则是一句话都问不了。其他异常照旧往上抛，不掩盖真问题
+            # （比如向量库读不了、维度不对，那些必须暴露）。
+            msg = str(ee)
+            if "EMBED_API_KEY" not in msg or EMBED_BACKEND != "cloud":
+                raise
+            print(f"[init] 云端嵌入缺 Key，降级为纯 BM25 关键词检索：{msg}")
+            rag_engine = create_rag_engine(
+                PERSIST_DIR, API_BASE, API_KEY, MODEL,
+                embed_backend="none",
+            )
+            init_error = "云端嵌入缺 EMBED_API_KEY，已降级为纯 BM25 检索（口语问法召回会变弱）"
+            return True
+
         print(f"[init] RAG 引擎初始化成功（嵌入={EMBED_BACKEND}，"
               f"维度={getattr(getattr(rag_engine, 'vector_store', None), 'stored_dim', None)}，"
               f"生成={'就绪' if getattr(rag_engine, 'gen_ready', False) else '缺失'}）")
@@ -385,6 +402,49 @@ def query(request: QueryRequest, http_request: Request):
     return JSONResponse(payload)
 
 
+_RES_STATUS = None
+
+
+def _resource_status() -> dict:
+    """关键运行时资源的就位情况。
+
+    为什么值得单独暴露：这三样东西缺失时**都不会报错**，只会静默跳过——
+      术语表缺 → 口语问法退化成不改写（答得差但不崩）
+      引用索引缺 → 引用对账整层关闭（编条号也发得出去）
+      数字索引缺 → 数字核对整层关闭（凭空造数也拦不住）
+    线上表现都是「能用但偶发不对劲」，翻日志也未必看得到。
+    这里把条目数直接摆出来，缺了就是一个 0 或 -1，一眼可见。
+    """
+    global _RES_STATUS
+    if _RES_STATUS is not None:
+        return _RES_STATUS
+    out = {}
+    try:
+        import glossary
+        out["glossary"] = glossary.stats()["entries"]
+    except Exception as e:
+        out["glossary"] = -1
+        out["glossary_err"] = type(e).__name__
+    try:
+        import citation_guard
+        ci = citation_guard.index()
+        ci.load()
+        out["citation_docs"] = len(ci.docs)
+    except Exception as e:
+        out["citation_docs"] = -1
+        out["citation_err"] = type(e).__name__
+    try:
+        import number_guard
+        ni = number_guard.index()
+        ni.load()
+        out["number_docs"] = len(ni.docs) if getattr(ni, "loaded", False) else 0
+    except Exception as e:
+        out["number_docs"] = -1
+        out["number_err"] = type(e).__name__
+    _RES_STATUS = out
+    return out
+
+
 @app.get("/health")
 def health():
     """给云托管健康检查用：只回进程活跃，不查知识库（避免探针把冷启动拖长）。
@@ -421,6 +481,8 @@ def health():
         # 内容安全是否真在生效：runtime_available=false 说明没检测到云托管注入的
         # token（本地开发正常，线上若为 false 则是「开放接口服务」没配好）
         "sec_check": security.status(),
+        # 三层静默降级的资源是否就位（术语表/引用索引/数字索引）
+        "resources": _resource_status(),
     }
 
 
