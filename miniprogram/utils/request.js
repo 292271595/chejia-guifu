@@ -23,17 +23,13 @@ function normalizeError(res) {
   return err;
 }
 
-function ask(question, history) {
-  const body = { question: question, format: 'blocks' };
-  // 第一轮不带历史：少传几百字节，也让后端直接走单轮快路径（不做改写）
-  if (history && history.length) body.history = history;
-
+function _post(path, body) {
   return new Promise((resolve, reject) => {
     if (cfg.useCloud) {
       // 私有链路：header 里的 X-WX-SERVICE 必须与服务名完全一致，否则 404
       wx.cloud.callContainer({
         config: { env: cfg.cloudEnv },
-        path: '/api/query',
+        path: path,
         method: 'POST',
         header: {
           'X-WX-SERVICE': cfg.serviceName,
@@ -54,7 +50,7 @@ function ask(question, history) {
 
     // 本地调试分支
     wx.request({
-      url: cfg.baseUrl + '/api/query',
+      url: cfg.baseUrl + path,
       method: 'POST',
       header: { 'content-type': 'application/json' },
       data: body,
@@ -70,6 +66,30 @@ function ask(question, history) {
         }));
       }
     });
+  });
+}
+
+function ask(question, history) {
+  const body = { question: question, format: 'blocks' };
+  // 第一轮不带历史：少传几百字节，也让后端直接走单轮快路径（不做改写）
+  if (history && history.length) body.history = history;
+  return _post('/api/query', body);
+}
+
+/**
+ * 上报「这条回答不准确」。
+ *
+ * 带上整轮上下文，不只是"用户觉得不对"这一句——后端拿到原问题、
+ * 系统当时理解成的问句、命中的处理器、是否降级，才能复现到底是哪一步错了。
+ * 只报一个「不对」，我们回头还是只能靠猜。
+ *
+ * 这个请求永远不该阻塞用户：失败了也 resolve，页面把按钮标成"没传上去"就好，
+ * 没必要在他已经不满意的时候再弹一个红色错误框。
+ */
+function submitFeedback(fb) {
+  return _post('/api/feedback', fb).catch((err) => {
+    console.warn('[feedback] 提交失败', err);
+    return { success: false, message: (err && err.message) || '没传上去' };
   });
 }
 
@@ -89,4 +109,4 @@ function blocksToText(blocks) {
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-module.exports = { ask, blocksToText };
+module.exports = { ask, submitFeedback, blocksToText };

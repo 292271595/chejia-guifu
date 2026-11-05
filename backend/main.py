@@ -11,7 +11,7 @@ if _here not in sys.path:
     sys.path.insert(0, _here)
 
 from fastapi import FastAPI, Request, staticfiles
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -20,6 +20,7 @@ import re
 
 from rag_engine import RAGEngine, create_rag_engine
 import security
+import feedback
 
 
 # ============ .env 加载（零依赖，密钥不进代码不进仓库） ============
@@ -395,7 +396,11 @@ def query(request: QueryRequest, http_request: Request):
 
     # 内容安全第二关：AI 生成的答案同样要过检测（审核会查生成侧，不只查输入）。
     # 只在拿到非空答案时才调；检测本身超时 1.2s，不会吃掉生成预算。
-    if answer:
+    #
+    # 超纲拒答跳过这一关：那句话是固定话术 + 用户原话的引用，而原话在上面
+    # 第一关已经查过，没有模型生成的内容。为一句话多花一次检测毫无意义，
+    # 也违背了"拒答是为了省资源"的初衷。
+    if answer and not result.get("refused"):
         ans_ok, ans_why = security.check_text(answer, openid=openid)
         if not ans_ok:
             answer = "抱歉，这次生成的回答未能通过内容校验。可以换个更具体的问法再试一次。"
@@ -422,12 +427,102 @@ def query(request: QueryRequest, http_request: Request):
         # 追问补全失败时引擎会直接回引导话术（degraded=ctx_unresolved），
         # 不透传的话前端会当成正常回答，样式和语气都不对。
         payload["degraded"] = result["degraded"]
+    if result.get("refused"):
+        # 超纲拒答（degraded=off_topic）。前端据此换成"不在范围内"的样式，
+        # 不要套用"回答较慢"的降级提示——那是另一回事，语气也对不上。
+        payload["refused"] = True
+        payload["scope_domain"] = result.get("scope_domain", "")
     if result.get("clarify"):
         # 追问有歧义（degraded=ctx_ambiguous）时给出的候选问法。
         # 前端渲染成按钮，点一下直接发问——比「请把问题说完整」友好得多，
         # 也不用让用户猜系统到底想要什么措辞。
         payload["clarify"] = result["clarify"]
     return JSONResponse(payload)
+
+
+# ============ 回答错误上报 ============
+# 为什么要有这个：题库能覆盖的问法是有限的，真实用户的问法五花八门。
+# 与其猜哪里答错了，不如让用户点一下告诉我们——他看到的错，才是真错。
+#
+# 三个字段值得特别注意，它们是复现问题的关键：
+#   resolved_question  系统把追问补成了什么（答偏最常见的原因，就是补偏了）
+#   fact_hit           命中了哪个事实层处理器（命中错的那个，答案必然不对）
+#   degraded           当时是不是降级了（降级时的答案本来就只是兜底）
+class FeedbackRequest(BaseModel):
+    question: str = ""            # 用户原话
+    answer: str = ""              # 当时的那条回答
+    resolved_question: str = ""   # 追问补全后的句子
+    fact_hit: str = ""
+    degraded: str = ""
+    reason: str = ""              # 用户选的原因（code）
+    note: str = ""                # 用户补充说明
+
+
+# 原因 code → 显示名。放后端而不是前端，是为了以后加类型时只改一处，
+# 前端传上来一个不认识的 code 也不会丢——会原样记下来。
+FEEDBACK_REASONS = {
+    "irrelevant": "答非所问",
+    "citation": "法条引错",
+    "outdated": "信息过时",
+    "incomplete": "没答到关键",
+    "unclear": "看不懂",
+    "other": "其他",
+}
+
+
+@app.post("/api/feedback")
+def submit_feedback(request: FeedbackRequest, http_request: Request):
+    """收一条「回答不准确」。
+
+    永远返回 success=True（除非被限流）——用户点这个按钮时心情已经不好了，
+    再给他一个报错弹窗只会更糟。真存不下来时，日志那条路还在。
+    """
+    openid = http_request.headers.get("X-WX-OPENID", "")
+    reason = (request.reason or "").strip()
+    res = feedback.save({
+        "question": request.question,
+        "answer": request.answer,
+        "resolved_question": request.resolved_question,
+        "fact_hit": request.fact_hit,
+        "degraded": request.degraded,
+        "reason": reason,
+        "reason_label": FEEDBACK_REASONS.get(reason, reason),
+        "note": request.note,
+    }, openid=openid)
+
+    if not res["ok"]:
+        # 限流也返回 200：前端不需要区分，它只需要知道"这次没传上去"，
+        # 而失败原因跟用户无关，说了他也做不了什么。
+        return JSONResponse({"success": False, "message": "提交太频繁了，稍后再试。"})
+
+    return JSONResponse({"success": True, "id": res["id"],
+                         "message": "收到了，谢谢。我们会拿这条去核对法规原文。"})
+
+
+# 导出用口令。没配就等于这个接口不存在——不能默认空口令放行，
+# 那等于把用户提问和回答全公开在公网上。
+FEEDBACK_TOKEN = os.getenv("FEEDBACK_TOKEN", "").strip()
+
+
+def _feedback_authed(token: str) -> bool:
+    if not FEEDBACK_TOKEN:
+        return False
+    # 常数时间比较，别用 == ：长度和前缀会通过响应时间漏出去
+    import hmac
+    return hmac.compare_digest((token or "").encode(), FEEDBACK_TOKEN.encode())
+
+
+@app.get("/api/feedback/export")
+def export_feedback(day: str = "", token: str = ""):
+    """按天导出原始 JSONL。没配 FEEDBACK_TOKEN 时按 404 处理。"""
+    if not FEEDBACK_TOKEN:
+        return JSONResponse({"success": False, "message": "Not Found"}, status_code=404)
+    if not _feedback_authed(token):
+        return JSONResponse({"success": False, "message": "口令不对"}, status_code=403)
+    if not day:
+        return JSONResponse({"success": True, "days": feedback.list_days()})
+    lines = feedback.load(day)
+    return PlainTextResponse("\n".join(lines), media_type="application/x-ndjson")
 
 
 _RES_STATUS = None
@@ -511,6 +606,9 @@ def health():
         "sec_check": security.status(),
         # 三层静默降级的资源是否就位（术语表/引用索引/数字索引）
         "resources": _resource_status(),
+        # 反馈通道的可用性。writable=false 时反馈仍会进日志，但导不出来——
+        # 这种情况必须能一眼看到，否则会以为"没人上报"，其实是存不下。
+        "feedback": feedback.status(),
     }
 
 
@@ -540,6 +638,10 @@ _ENV_SPEC = {
                        "desc": "查询超时，需 < 15"},
     "FACT_REVIEW":    {"secret": False, "required": False, "default": "on",
                        "desc": "事实层答案大模型复核开关（on/off）。开启后每题多约 1.4 秒，可拦住答错对象的答案"},
+    "SCOPE_GUARD":    {"secret": False, "required": False, "default": "on",
+                       "desc": "非车驾问题拒答开关（on/off）。关闭后护照类问题会照常走检索"},
+    "FEEDBACK_TOKEN": {"secret": True, "required": False, "default": "",
+                       "desc": "反馈导出接口口令。不配则 /api/feedback/export 返回 404（反馈仍进日志）"},
 }
 
 

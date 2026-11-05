@@ -119,10 +119,61 @@
 
               <!-- 底部条：AI 标识 + 操作 -->
               <view class="ai-foot">
-                <text class="ai-tag">AI 生成</text>
+                <text class="ai-tag ai-tag-scope" wx:if="{{item.refused}}">不在范围内</text>
+                <text class="ai-tag" wx:else>AI 生成</text>
                 <view class="ai-actions">
                   <text class="act" bindtap="copyAnswer" data-index="{{index}}">复制</text>
-                  <text class="act" bindtap="goAbout">反馈</text>
+                  <!-- 回答不准确上报。刻意做成描边按钮而不是纯文字：
+                       用户想投诉的时候最怕找不到入口，跟"复制"摆成一样低调就等于没做。 -->
+                  <view
+                    class="act-wrong {{item.fbDone ? 'act-wrong-done' : ''}}"
+                    bindtap="openFeedback"
+                    data-index="{{index}}"
+                  >
+                    <text>{{item.fbDone ? '已反馈' : '回答不准'}}</text>
+                  </view>
+                </view>
+              </view>
+
+              <!-- 上报面板：点开才渲染，平时不占地方 -->
+              <view class="fb" wx:if="{{item.fbOpen}}">
+                <view class="fb-title">哪里不对？</view>
+                <view class="fb-reasons">
+                  <view
+                    class="fb-chip {{item.fbReason === r.code ? 'fb-chip-on' : ''}}"
+                    wx:for="{{fbReasons}}"
+                    wx:for-item="r"
+                    wx:for-index="ri"
+                    wx:key="code"
+                    bindtap="pickReason"
+                    data-index="{{index}}"
+                    data-code="{{r.code}}"
+                  >
+                    <text>{{r.label}}</text>
+                  </view>
+                </view>
+                <textarea
+                  class="fb-note"
+                  value="{{item.fbNote}}"
+                  placeholder="补充一句更好（可不填）"
+                  placeholder-class="fb-ph"
+                  maxlength="200"
+                  auto-height
+                  cursor-spacing="24"
+                  bindinput="onFbNote"
+                  data-index="{{index}}"
+                />
+                <view class="fb-actions">
+                  <view class="fb-cancel" bindtap="openFeedback" data-index="{{index}}">
+                    <text>取消</text>
+                  </view>
+                  <view
+                    class="fb-submit {{item.fbSending ? 'fb-submit-off' : ''}}"
+                    bindtap="sendFeedback"
+                    data-index="{{index}}"
+                  >
+                    <text>{{item.fbSending ? '提交中…' : '提交'}}</text>
+                  </view>
                 </view>
               </view>
             </block>
@@ -168,7 +219,8 @@
       </view>
     </view>
     <view class="composer-tip">
-      <text>{{disclaimer}}</text>
+      <text class="tip-text">{{disclaimer}}</text>
+      <text class="tip-link" bindtap="goAbout">关于与免责</text>
     </view>
   </view>
 

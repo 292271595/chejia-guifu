@@ -325,6 +325,33 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
         resolved = False
         ctx_reason = ""
 
+        # ── L-1：领域守卫（纯字符串匹配，微秒级）──
+        # 必须放在最前面。放到检索之后就没意义了：检索层不管什么问题都会
+        # 返回 top-k，向量检索没有「查不到」这个状态；生成层再拿这堆不相干
+        # 片段组织成一段看着像的话。既烧 token，又比直接说「不归我管」更误导。
+        #
+        # 只看**原句**，不看补全结果——补全本身要调模型，为了判断一句
+        # 「护照怎么办」值不值得答而先花 3 秒改写，本末倒置。
+        # 所以「那护照呢」这种追问也能在第一时间被拦下。
+        try:
+            import scope_guard
+            if scope_guard.enabled():
+                domain = scope_guard.check(user_question)
+                if domain:
+                    print(f"[RAGEngine] 超纲拒答（{domain}）：{user_question!r}")
+                    return {
+                        "answer": scope_guard.refusal_text(user_question, domain),
+                        "sources": [],
+                        # 单独一个状态值：既不是「慢」（timeout），也不是
+                        # 「没听懂」（ctx_unresolved），前端要按它换语气和样式
+                        "degraded": "off_topic",
+                        "refused": True,
+                        "scope_domain": domain,
+                    }
+        except Exception as e:
+            # 守卫本身出问题不能把问答打挂：宁可多答一次，不可整轮失败
+            print(f"[RAGEngine] 领域守卫异常（忽略，按正常流程走）: {e}")
+
         if history:
             # ── L0：规则补全（毫秒级，不调模型）──
             # 「那 B2 呢」只是换主语、「要多久」只是换谓词，字符串替换就够。
