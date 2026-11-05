@@ -418,6 +418,10 @@ def query(request: QueryRequest, http_request: Request):
         # 追问没接上时的原因（超时/被校验拦下）。只在内部诊断用，前端可不渲染，
         # 但没有它就只能靠猜「是没触发还是被拦了」。
         payload["ctx_reason"] = result["ctx_reason"]
+    if result.get("degraded"):
+        # 追问补全失败时引擎会直接回引导话术（degraded=ctx_unresolved），
+        # 不透传的话前端会当成正常回答，样式和语气都不对。
+        payload["degraded"] = result["degraded"]
     return JSONResponse(payload)
 
 
