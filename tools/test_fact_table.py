@@ -133,6 +133,28 @@ CASES = [
     ("大车驾驶人记满12分要学习多少天", "FULL_SCORE"),
     ("A2扣满12分怎么办", "FULL_SCORE"),
     ("B2记满12分要学多久", "FULL_SCORE"),
+    # ── 伤亡事故 / 非法改装后的检验周期（公交管〔2022〕295号第四条）──
+    # 原实现只有标准优化周期，没有「仍按原规定周期检验」这个例外：
+    # 「发生伤人事故后检车周期有变化吗」被答成「10 年内每 2 年一检」，
+    # 恰好是这辆车不能适用的那个周期——答案与事实相反，用户按此办会漏检。
+    ("发生伤人事故后，检车周期有变化吗", "VEHICLE:CYCLE_ACCIDENT"),
+    ("发生伤人事故后年检周期有变化吗", "VEHICLE:CYCLE_ACCIDENT"),
+    ("出过伤人事故的车还要年检吗", "VEHICLE:CYCLE_ACCIDENT"),
+    ("撞伤人之后年检多久一次", "VEHICLE:CYCLE_ACCIDENT"),
+    ("撞死人了 年检周期", "VEHICLE:CYCLE_ACCIDENT"),
+    ("非法改装被处罚过 年检周期有变化吗", "VEHICLE:CYCLE_ACCIDENT"),
+    ("摩托车发生伤人事故 检验周期", "VEHICLE:CYCLE_ACCIDENT"),
+    ("出过伤人事故的车还能免检吗", "VEHICLE:EXEMPT_ACCIDENT"),
+    ("非法改装被查过 还能免检吗", "VEHICLE:EXEMPT_ACCIDENT"),
+    ("发生伤亡事故后免检资格还有吗", "VEHICLE:EXEMPT_ACCIDENT"),
+    # 只提「事故」、没说伤没伤人 → 分两种情况答，不替用户假定
+    ("事故车还能享受免检吗", "VEHICLE:EXEMPT_ACCIDENT_ASK"),
+    ("事故车年检周期", "VEHICLE:CYCLE_ACCIDENT_ASK"),
+    # 反向：没人受伤不触发例外；面包车本来就按原周期执行，事故不改变它
+    ("就蹭掉点漆没人受伤 年检周期有变化吗", "VEHICLE:CYCLE"),
+    ("没出过事故 年检周期", "VEHICLE:CYCLE"),
+    ("面包车发生伤人事故 检验周期", "VEHICLE:CYCLE_ACCIDENT_NOCHANGE"),
+    ("年检多久一次", "VEHICLE:CYCLE"),
 ]
 
 print("=" * 88)

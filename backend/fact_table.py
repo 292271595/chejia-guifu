@@ -1013,8 +1013,12 @@ _HANDLERS = [
      r"车顶行李架|行李架|车顶箱|行李箱|出入口踏步|脚踏板|侧踏板|散热器面罩|轮毂|轮辋)",
      {"PROCEDURE", "QUALIFY", "PENALTY", "SIGN", "LIST"}),
     # ── 12. 车辆业务（检验/免检/报废/转让/核载/车辆类别）──
+    # 主题闸门就是调度入口：这里漏一个口语词，处理器写得再对也进不来。
+    # 「检车」「车检」「验车」「审车」都是「年检」的日常说法，原先只收了后面两个
+    # （而且在 q_inspection_cycle 内部，不在本表的主题正则里），
+    # 结果「发生伤人事故后，检车周期有变化吗」整句没进事实层，直接掉到 RAG。
     (fact_vehicle.q_vehicle,
-     r"(年检|检验|检测|上线|免检|报废|二手车|过户|转让|转籍|迁出|迁入|迁到|迁往|平移|提档|调档|"
+     r"(年检|检验|检测|检车|车检|验车|审车|上线|免检|报废|二手车|过户|转让|转籍|迁出|迁入|迁到|迁往|平移|提档|调档|"
      r"电动|电摩|核载|座|检一次|几年检)",
      {"DURATION", "LIST", "PENALTY", "PROCEDURE", "QUALIFY", "VALUE", "SIGN"}),
     # ── 12.5 行政业务：审验 / 备案 / 身体状况变化 / 校车 / 境外军队换证 ──
@@ -1082,7 +1086,25 @@ _HANDLERS = [
     # (ext.q_penalty_fallback, r"(处罚|罚款|怎么罚|拘留|扣车)", {"PENALTY"}),
 ]
 
-_MULTI_DEMAND = ("并且", "还有", "另外", "同时", "顺便")
+_MULTI_DEMAND = ("并且", "另外", "同时", "顺便")
+
+
+def _is_multi_demand(q: str) -> bool:
+    """是不是「一句话里提了两件事」。
+
+    「还有」要单独判：它多数是"是否仍然有"（免检资格还有吗、还有没有），
+    不是并列的第二问。一律当多诉求，会把这类问句整句挡在事实层外面。
+    但「还有效吗」「还有别的办法吗」是真·多诉求/跨制度，必须继续挡——
+    前者问的是保险效力，落到过户处理器上会答成办理流程。
+    """
+    if any(w in q for w in _MULTI_DEMAND):
+        return True
+    for m in re.finditer(r"还有", q):
+        tail = q[m.end():m.end() + 2]
+        if not tail.startswith(("吗", "没")):
+            return True
+    return False
+
 
 # ── 制度必要条件守卫（2026-11-04 线上事故后加）──
 # 事实层靠"关键词命中"决定答哪一问，同一个词跨两个制度时必然答串，
@@ -1143,7 +1165,7 @@ def lookup(question: str, max_len: int = 44) -> Optional[Dict]:
         return None
     if q.count("？") + q.count("?") > 1:
         return None
-    if any(w in q for w in _MULTI_DEMAND):
+    if _is_multi_demand(q):
         return None
 
     aspects = detect_aspects(q)
