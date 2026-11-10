@@ -190,6 +190,27 @@ CASES = [
     ("不换证会怎么样", "RENEW:CONSEQUENCE"),
     ("驾驶证注销情形有哪些", "CANCEL:LIST"),
     ("注销期间开车算无证驾驶吗", "STATUS_DRIVE"),
+    # 2024-07-01 起「优化驾驶证重新申领考试科目」：问「重新申领考几科」必须能进事实层。
+    # 这类问法没有「恢复」二字，注销与重新申领之间还夹着逗号，旧主题两头都卡住。
+    ("驾驶证注销三年了，重新申领要考几科", "RECOVER:CLOSED"),
+    ("驾驶证注销超过两年 重新申领考什么科目", "RECOVER:CLOSED"),
+    ("驾驶证超三年未换证 重新申领要考哪几科", "RENEW:OVERDUE_GE3"),
+]
+
+# ── 文案内容断言：key 对了不等于话说对了 ──
+# 「注销满 2 年只能重考全部科目」这个结论性错误，key 仍然是 OVERDUE_GE3 / CLOSED，
+# 只判 key 抓不住。2026-11 用户就是拿这句话来纠错的，所以直接卡措辞。
+CONTENT_CASES = [
+    # C 类因逾期三年未换证被注销，重新申领只考科目一 + 科目三道路驾驶技能
+    ("驾驶证超三年未换证怎么办",
+     ["科目三道路驾驶技能", "免考"], ["重考全部科目", "不是只考科目一"]),
+    ("驾驶证注销超过两年怎么办",
+     ["科目三道路驾驶技能"], ["重考全部科目", "不是只考科目一"]),
+    ("驾驶证注销三年了，重新申领要考几科",
+     ["科目三道路驾驶技能", "C 类"], ["重考全部科目"]),
+    # 反向：吊销不享受这条优化，禁驾期满仍是全科目
+    ("醉酒驾驶被吊销 五年后重新考",
+     ["全部科目"], ["只考科目一和科目三", "免考科目二"]),
 ]
 
 print("=" * 88)
@@ -216,3 +237,20 @@ if fail:
     print("\n未通过明细：")
     for q, e, a in fail:
         print(f"  {q}  期望={e}  实际={a}")
+
+print("=" * 88)
+print("文案内容断言")
+cok = 0
+cfail = []
+for q, must, mustnot in CONTENT_CASES:
+    r = FT.lookup(q)
+    text = (r or {}).get("answer", "") or ""
+    miss = [w for w in must if w not in text]
+    bad = [w for w in mustnot if w in text]
+    if r and not miss and not bad:
+        cok += 1
+        print(f"{q:<34} OK")
+    else:
+        cfail.append((q, (r or {}).get("fact", "（未命中）"), miss, bad))
+        print(f"{q:<34} FAIL  缺={miss} 忌={bad} key={(r or {}).get('fact')}")
+print(f"内容断言通过 {cok}/{len(CONTENT_CASES)}")

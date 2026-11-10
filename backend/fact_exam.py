@@ -100,6 +100,11 @@ def add_exam_plan(holder: Optional[str], target: Optional[str]) -> Optional[Tupl
 
 def q_exam(question: str) -> Optional[Dict]:
     q = question
+    # 资格状态语境下「考几科」不是"增驾考哪几科"，而是"注销/吊销/超期后重新申领要考哪几科"。
+    # 那两个处理器排在考试处理器后面，不在这里让位就会被 EXAM:COUNT / EXAM:BASIC 抢答：
+    # 「驾驶证注销三年了，重新申领要考几科」实测答成增驾科目表。
+    if re.search(r"(注销|吊销|撤销|换证|过期|逾期|超期|失效)", q):
+        return None
     codes = extract_codes(q)
     # 目标车型：优先取"增驾X"里的 X
     target = None
