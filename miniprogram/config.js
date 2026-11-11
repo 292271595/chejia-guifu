@@ -12,7 +12,7 @@ const BASE_URL = 'http://127.0.0.1:8000';   // 仅本地调试生效
 
 module.exports = {
   appName: '车驾规问答',
-  version: '0.1.0',
+  version: '1.0.0',
   feedbackEmail: '',
 
   useCloud: !!(CLOUD_ENV && SERVICE_NAME),

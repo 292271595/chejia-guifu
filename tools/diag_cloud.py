@@ -10,13 +10,14 @@
 检查项：
     1. /health        → 引擎是否初始化、生成侧是否就绪、嵌入后端/维度/是否熔断
     2. /api/env       → 容器内 8 条环境变量到底注入了没有（缺失/空值/带空格分别报）
-    3. /api/status    → 向量条数（必须 735）
+    3. /api/status    → 向量条数（必须与本地 chroma_db 一致，期望值现读本地库）
     4. /api/query     → 事实层（应 0.x 秒）与 RAG（应 <12s）各一发，验 blocks 结构
 
 任何一项不符合预期都会给出具体原因和处置建议，不是只打一行 FAIL。
 """
 import io
 import json
+import os
 import sys
 import time
 import urllib.request
@@ -29,6 +30,25 @@ FACT_Q = "C1 能开什么车"
 RAG_Q = "驾驶证丢了同时车辆年检也过期了，分别要怎么办，会不会被处罚"
 
 PASS, FAIL, WARN, SKIP = "[PASS]", "[FAIL]", "[WARN]", "[SKIP]"
+
+
+def local_doc_count():
+    """本地 chroma 的条数，当作线上 document_count 的期望值。
+
+    以前把 735 写死在判定里，每 rebuild 一次就过期一次，过期后的表现是
+    「线上数字正确、却被报成 WARN」，反而让人去怀疑线上。改成现读本地库：
+    读不到（换机器、没跑过 build_kb）就返回 None，那时只报数字、不下结论。
+    """
+    p = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "chroma_db", "chroma.sqlite3")
+    try:
+        import sqlite3
+        conn = sqlite3.connect(f"file:{p}?mode=ro", uri=True)
+        n = conn.execute("select count(*) from embeddings").fetchone()[0]
+        conn.close()
+        return n
+    except Exception:
+        return None
 
 
 def req(base, path, body=None, timeout=40):
@@ -133,20 +153,23 @@ def main():
         problems.append("status 不可达")
     else:
         n = s.get("document_count", 0)
+        expect = local_doc_count()
         engine_ok = bool(h and h.get("engine"))
         if not engine_ok:
             # engine=false 时接口直接短路返回 0，这个 0 与"镜像里有没有库"无关，
             # 报成"库没打进镜像"会把排查方向带偏到 .dockerignore 上（那里通常没问题）。
             print(f"  {SKIP} document_count={n} —— 引擎未初始化时此值恒为 0，不代表镜像缺库")
             print("        → 先解决上一步的引擎问题，重启后再看这一项")
-        elif n == 735:
+        elif expect is None:
+            print(f"  {WARN} document_count={n}（本地 chroma_db 读不到，无法比对，先看数字是否非 0）")
+        elif n == expect:
             print(f"  {PASS} document_count={n}（与本地库一致）")
         elif n == 0:
             print(f"  {FAIL} document_count=0，引擎已就绪但读不到向量库")
             print("         → 确认 .dockerignore 没排除 chroma_db、构建拉的是最新 main")
             problems.append("向量库为空")
         else:
-            print(f"  {WARN} document_count={n}，预期 735（可能库版本与代码不一致）")
+            print(f"  {WARN} document_count={n}，本地库是 {expect}（可能库版本与代码不一致）")
 
     # ---------- 3. /api/query ----------
     print("\n[4/4] POST /api/query")
