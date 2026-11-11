@@ -1029,7 +1029,13 @@ _HANDLERS = [
      r"(信息|地址|电话|联系方式|住址|姓名).{0,8}(变更|变化|改了|换了)", {"PROCEDURE"}),
     (fact_admin.q_body_change,
      r"(身体条件|身体状况|身体).{0,10}(变化|不适合|不符合|下降)", {"PROCEDURE", "QUALIFY"}),
-    (fact_admin.q_foreign_military, r"(境外|国外|军队|部队|武警|军警)", {"PROCEDURE", "QUALIFY"}),
+    # 主题正则必须含「军人/服役」：线上问法是"军人换 B2 考几科""退役军人换大货车要考什么"，
+    # 不含"军队/部队/武警"任一字，处理器写得再对也进不来（本项目第五次栽在这一处）。
+    # cov 同时补 SUBJECT/DEFINE：「考几科」判 SUBJECT、「驾龄怎么算」判 DEFINE，
+    # 原来只给 PROCEDURE/QUALIFY，主题过了仍在 cov 闸门被挡。
+    (fact_admin.q_foreign_military,
+     r"(境外|国外|军队|部队|武警|军警|军人|退役军人|服役)",
+     {"PROCEDURE", "QUALIFY", "SUBJECT", "DEFINE", "DURATION"}),
     (fact_admin.q_disease,
      r"(癫痫|心脏病|精神病|痴呆|眩晕|帕金森|震颤麻痹|癔病|美尼尔|器质性)", QUALIFY),
     (fact_admin.q_forever, r"(终生|终身)", {"LIST", "QUALIFY"}),
