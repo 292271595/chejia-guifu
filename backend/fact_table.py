@@ -1038,6 +1038,9 @@ _HANDLERS = [
      r"临时身份证|(身份证|身份证明).{0,8}(变更|更新|号码|换了|变了))",
      {"PROCEDURE", "QUALIFY", "LIST", "SIGN"}),
     (fact_admin.q_locked, r"锁定", {"DEFINE", "QUALIFY"}),
+    # 轻微事故视频快处：答案带"仅试点城市"这个硬限定，不能交给模型自由发挥
+    (fact_admin.q_video_fast, r"(视频|快处|快赔)",
+     {"PROCEDURE", "QUALIFY", "LIST", "PENALTY", "DURATION"}),
     # ── 13. 学习驾驶证明（必须早于换证，二者都含"有效期"）──
     (q_study_cert, r"(学习驾驶证明|学车证明|考试有效期)",
      {"DURATION", "VALIDITY", "PROCEDURE"}),

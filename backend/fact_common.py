@@ -402,6 +402,17 @@ def detect_aspects(q: str) -> frozenset:
 # ============================================================
 # 九、来源结构
 # ============================================================
+# 「人在境外、证件到期」的识别 —— 境外换证与延期换证共用一套判定。
+# 为什么放公共模块：fact_license_ext 和 fact_admin 各有一个"境外驾驶证换中国证"
+# 的处理器，都会把「人在国外、驾照快过期」误当成「境外驾照怎么换」。
+# 同一句话两处判断，必然走偏一处，所以只留一份。
+ABROAD_SELF = re.compile(
+    r"(?:我|本人|人|自己|他|她)(?:还|仍|一直)?(?:在|留在|身在|身处|困在)(?:国外|境外|海外)|"
+    r"(?:回不了国|回不来|无法回国|不能回国|没法回国|人在国外|人在境外)"
+)
+ABROAD_EXPIRE = re.compile(r"(过期|到期|届满|有效期|换证|换领|审验|延期|身体条件证明|被注销)")
+
+
 def source(title: str, snippet: str, source_file: str = "driving_license.md") -> Dict:
     return {"title": title, "source": source_file, "score": 1.0, "snippet": snippet[:300]}
 
