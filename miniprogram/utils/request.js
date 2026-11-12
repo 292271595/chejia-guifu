@@ -20,6 +20,13 @@ function normalizeError(res) {
   }
   const err = new Error(message);
   err.statusCode = res && res.statusCode;
+  // 后端原样返回的东西必须带上：404(detail)、405(detail)、500、网关 HTML
+  // 在界面上全都长得一模一样，排查时只剩「服务没有响应」这一句，等于没有信息。
+  try {
+    err.detail = typeof data === 'string' ? data.slice(0, 300) : JSON.stringify(data).slice(0, 300);
+  } catch (e) {
+    err.detail = '(无法序列化)';
+  }
   return err;
 }
 
@@ -88,7 +95,13 @@ function ask(question, history) {
  */
 function submitFeedback(fb) {
   return _post('/api/feedback', fb).catch((err) => {
-    console.warn('[feedback] 提交失败', err);
+    // 打成一行纯文本，别只丢一个 Error 对象——真机调试里对象是收起的，
+    // 状态码这种关键字段永远看不到。
+    console.warn(
+      '[feedback] 提交失败 status=' + ((err && err.statusCode) === undefined ? 'undefined' : err.statusCode) +
+      ' detail=' + ((err && err.detail) || '(空)') +
+      ' msg=' + ((err && err.message) || '')
+    );
     return { success: false, message: (err && err.message) || '没传上去' };
   });
 }
