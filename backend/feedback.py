@@ -67,6 +67,25 @@ def _cut(s, n: int) -> str:
     return s if len(s) <= n else s[:n] + "…"
 
 
+def _log(line: str) -> None:
+    """打一行日志，编码不配合也不许抛。
+
+    为什么不能直接 print：容器的基础镜像不保证 locale 是 UTF-8。一旦 stdout
+    是 ascii，含中文的行会抛 UnicodeEncodeError——而这条 print 在 save() 里，
+    抛出去就变成 500，前端只会看到「没传上去」。日志是排查手段，不能自己
+    成为故障源。
+    """
+    try:
+        print(line, flush=True)
+    except UnicodeEncodeError:
+        try:
+            print(line.encode("ascii", "backslashreplace").decode("ascii"), flush=True)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 def _allowed(openid: str) -> bool:
     """简单的滑动窗口限流。进程内内存即可——多实例部署时各算各的，
     这种量级下不追求全局精确，挡住连点就够了。"""
@@ -96,7 +115,7 @@ def _write_file(rec: Dict) -> bool:
     except Exception as e:
         # 写不进去不是错——日志那一路已经保住了信息。
         # 这里必须打出来，否则「明明没人上报」会被当成真相。
-        print(f"[FB] 落盘失败（已降级，日志仍在）: {e}")
+        _log(f"[FB] 落盘失败（已降级，日志仍在）: {e}")
         return False
 
 
@@ -218,7 +237,7 @@ def save(payload: Dict, openid: str = "") -> Dict:
 
     # 这一行是主要留存手段：日志系统会保存，容器重启也不丢。
     # 要检索就在云托管控制台搜 "[FB] "，整行是合法 JSON，复制出来可直接解析。
-    print("[FB] " + json.dumps(rec, ensure_ascii=False))
+    _log("[FB] " + json.dumps(rec, ensure_ascii=False))
 
     _write_file(rec)
     _post_webhook(rec)

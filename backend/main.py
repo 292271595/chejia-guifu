@@ -470,33 +470,58 @@ FEEDBACK_REASONS = {
 }
 
 
+@app.get("/api/feedback/ping")
+def feedback_ping():
+    """接口存活探针。
+
+    为什么值得单开一个：前端把 404/超时/500 全提示成「没传上去，再试一次」，
+    用户和排查的人都拿不到任何信息。有了它，浏览器打开这个地址就能分流：
+      200 → 接口在、进程活着
+      404 → 镜像里没有这版代码（发版没生效或拉错分支）
+      405 → 路径在但方法不对（浏览器地址栏只能发 GET，这条不会出现）
+
+    不写库、不读盘、不调外部，纯粹回答「你在不在」。
+    """
+    return JSONResponse({"ok": True, "route": "feedback", "probe": "v1"})
+
+
 @app.post("/api/feedback")
 def submit_feedback(request: FeedbackRequest, http_request: Request):
     """收一条「回答不准确」。
 
-    永远返回 success=True（除非被限流）——用户点这个按钮时心情已经不好了，
+    永远返回 200（除非被限流）——用户点这个按钮时心情已经不好了，
     再给他一个报错弹窗只会更糟。真存不下来时，日志那条路还在。
+
+    这里整个包在 try 里，是因为反馈链路里**任何**一处抛异常（落盘、编码、
+    webhook 线程、时区）都会变成 500，而前端只会把 500 说成「没传上去」，
+    排查的人看不出是哪一步断的。宁可返回一条带异常类型的结果，也不给 500。
     """
     openid = http_request.headers.get("X-WX-OPENID", "")
     reason = (request.reason or "").strip()
-    res = feedback.save({
-        "question": request.question,
-        "answer": request.answer,
-        "resolved_question": request.resolved_question,
-        "fact_hit": request.fact_hit,
-        "degraded": request.degraded,
-        "reason": reason,
-        "reason_label": FEEDBACK_REASONS.get(reason, reason),
-        "note": request.note,
-    }, openid=openid)
+    try:
+        res = feedback.save({
+            "question": request.question,
+            "answer": request.answer,
+            "resolved_question": request.resolved_question,
+            "fact_hit": request.fact_hit,
+            "degraded": request.degraded,
+            "reason": reason,
+            "reason_label": FEEDBACK_REASONS.get(reason, reason),
+            "note": request.note,
+        }, openid=openid)
 
-    if not res["ok"]:
-        # 限流也返回 200：前端不需要区分，它只需要知道"这次没传上去"，
-        # 而失败原因跟用户无关，说了他也做不了什么。
-        return JSONResponse({"success": False, "message": "提交太频繁了，稍后再试。"})
+        if not res["ok"]:
+            # 限流也返回 200：前端不需要区分，它只需要知道"这次没传上去"，
+            # 而失败原因跟用户无关，说了他也做不了什么。
+            return JSONResponse({"success": False, "message": "提交太频繁了，稍后再试。"})
 
-    return JSONResponse({"success": True, "id": res["id"],
-                         "message": "收到了，谢谢。我们会拿这条去核对法规原文。"})
+        return JSONResponse({"success": True, "id": res["id"],
+                             "message": "收到了，谢谢。我们会拿这条去核对法规原文。"})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        # 把异常类型回给前端：用户看不懂没关系，排查的人一看就知道该查哪一层。
+        return JSONResponse({"success": False, "message": f"服务端异常：{type(e).__name__}"})
 
 
 # 导出用口令。没配就等于这个接口不存在——不能默认空口令放行，
