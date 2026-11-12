@@ -25,6 +25,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -47,6 +48,28 @@ _FEISHU_SECRET = os.getenv("FEISHU_SECRET", "").strip()
 MAX_QUESTION = 300
 MAX_ANSWER = 1500
 MAX_NOTE = 500
+
+# 群消息里愿意带多长的回答。三家积压能力差一个数量级，必须分开算：
+# 飞书、钉钉单条可到 20KB；企业微信 text.content 只有 2048 **字节**，
+# 中文 UTF-8 一个字 3 字节，留给答案的大约 400 字。
+# 超限的后果不是报错而是「整条被拒」，排查时很难联想到长度。
+ANSWER_IN_PUSH = {"feishu": 600, "dingtalk": 600, "wecom": 400}
+
+
+def _fit_bytes(text: str, limit: int) -> str:
+    """按**字节**截断，不是按字数。
+
+    企业微信 text.content 的上限写的是 2048 字节而不是 2048 字，
+    中文一个字 3 字节，按字数算会整整超出三倍。超了它回一个 4xx，
+    而我们的推送在后台线程里，用户和页面都感知不到——反馈就这么平静地丢了。
+    """
+    raw = text.encode("utf-8")
+    if len(raw) <= limit:
+        return text
+    suffix = "…（超长已截断）"
+    keep = limit - len(suffix.encode("utf-8"))
+    # 别把汉字切一半，那会变成替换字符
+    return raw[:keep].decode("utf-8", "ignore") + suffix
 
 # 限流：同一 openid 每小时最多这么多条。
 # 防的不是恶意攻击，是手滑连点——同一个人一小时内报 60 条基本可以确定
@@ -149,12 +172,17 @@ def _feishu_sign(secret: str):
 
 def _webhook_body(kind: str, text: str) -> bytes:
     if kind == "feishu":
+        # 飞书 text 消息体上限 20KB，这里留足余量按 10KB 收，一般不触发
+        text = _fit_bytes(text, 10000)
         body = {"msg_type": "text", "content": {"text": text}}
         if _FEISHU_SECRET:
             ts, sign = _feishu_sign(_FEISHU_SECRET)
             body["timestamp"] = ts
             body["sign"] = sign
         return json.dumps(body, ensure_ascii=False).encode("utf-8")
+    # 企业微信 / 钉钉：企业微信的 text.content 硬上限是 2048 字节，
+    # 留 200 字节给 JSON 外壳，正文按 1800 收。
+    text = _fit_bytes(text, 1800)
     return json.dumps({"msgtype": "text", "text": {"content": text}},
                       ensure_ascii=False).encode("utf-8")
 
@@ -168,7 +196,7 @@ def _post_webhook(rec: Dict) -> None:
         kind = _webhook_kind(_WEBHOOK)
         try:
             import urllib.request
-            body = _webhook_body(kind, _format_for_human(rec))
+            body = _webhook_body(kind, _format_for_human(rec, kind))
             req = urllib.request.Request(
                 _WEBHOOK, data=body,
                 headers={"Content-Type": "application/json"}, method="POST")
@@ -194,16 +222,40 @@ def _post_webhook(rec: Dict) -> None:
     threading.Thread(target=run, daemon=True).start()
 
 
-def _format_for_human(rec: Dict) -> str:
-    """给群里看的一行版。"""
+def _format_for_human(rec: Dict, kind: str = "wecom") -> str:
+    """给群里看的版本。
+
+    回答原文必须带上——用户说「这条答错了」，我要看的就是他屏幕上那段话。
+    只发问题不发答案，等于把最关键的证据留在了我这边，群里只能看到一句
+    「某人不满意」，还得回头去日志里捞，那配 webhook 的意义就丢了一半。
+
+    但字数得按平台卡，不能一股脑塞：
+    飞书/钉钉单条上限约 20KB，企业微信的 text.content 只有 **2048 字节**
+    （中文 UTF-8 占 3 字节，约 680 字）。超了对方直接拒，而拒的理由写在
+    正文里、HTTP 状态码照样 200，很容易被当成「发成功了」。
+    """
+    ans = rec.get("answer") or ""
+    limit = ANSWER_IN_PUSH.get(kind, 400)
+    if len(ans) > limit:
+        ans = ans[:limit].rstrip() + f"\n……（原答案 {len(rec.get('answer') or '')} 字，此处截断，全文见日志或导出）"
+
     lines = [
         f"【回答不准确】{rec.get('reason_label') or rec.get('reason') or '未选原因'}",
         f"问题：{rec.get('question')}",
     ]
     if rec.get("resolved_question") and rec["resolved_question"] != rec.get("question"):
         lines.append(f"系统理解成：{rec['resolved_question']}")
+    if ans:
+        lines.append("")           # 空行隔开，不然一大段贴着脸看不清
+        lines.append(f"当时的回答：\n{ans}")
+    else:
+        # 空着不说，群消息看起来就跟「只收到问题」一样，等于没修。
+        # 宁可显式写一句，说明是上报方没带，而不是消息拼装漏了。
+        lines.append("当时的回答：（前端未带上来，需去日志按 id 取）")
     if rec.get("fact_hit"):
         lines.append(f"命中处理器：{rec['fact_hit']}")
+    if rec.get("degraded"):
+        lines.append(f"降级：{rec['degraded']}")
     if rec.get("note"):
         lines.append(f"用户补充：{rec['note']}")
     lines.append(f"时间：{rec.get('ts')}  用户：{rec.get('openid') or '-'}")
