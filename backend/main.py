@@ -642,6 +642,10 @@ _ENV_SPEC = {
                        "desc": "非车驾问题拒答开关（on/off）。关闭后护照类问题会照常走检索"},
     "FEEDBACK_TOKEN": {"secret": True, "required": False, "default": "",
                        "desc": "反馈导出接口口令。不配则 /api/feedback/export 返回 404（反馈仍进日志）"},
+    "FEEDBACK_WEBHOOK": {"secret": True, "required": False, "default": "",
+                       "desc": "反馈推送地址（企业微信/钉钉/飞书群机器人），按域名自动选请求格式"},
+    "FEISHU_SECRET":  {"secret": True, "required": False, "default": "",
+                       "desc": "飞书机器人签名密钥。机器人开了「签名校验」才需要，不开可不填"},
 }
 
 

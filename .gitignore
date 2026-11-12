@@ -25,6 +25,9 @@ backend/*.log
 # 微信开发者工具个人配置（含本机路径，不该进仓库）
 miniprogram/project.private.config.json
 
+# 用户反馈原始数据：含 openid 与提问原文，只在机器上留，不进仓库
+data/feedback/
+
 # 系统
 .DS_Store
 Thumbs.db

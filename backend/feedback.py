@@ -12,10 +12,17 @@
   2. 落盘 JSONL（FEEDBACK_DIR）—— 方便集中导走，但可能随容器重置消失。
      写失败只降级，不影响接口返回。
   3. Webhook（FEEDBACK_WEBHOOK）—— 配了就往外出（企业微信机器人、
-     飞书多维表格、自建接口都行）。长期台账靠这条，不配也不影响前两条。
+     飞书群机器人、钉钉机器人、自建接口都行）。长期台账靠这条，不配也不影响前两条。
+     三家请求体格式不一样，填错地址对方只回一个 4xx，日志里只看到「发送失败」，
+     所以这里按域名自动选格式，不用人去记：企业微信/钉钉是
+     `{"msgtype":"text","text":{"content":...}}`，飞书是
+     `{"msg_type":"text","content":{"text":...}}`。
 
 本地开发时把 FEEDBACK_DIR 指到项目 data/feedback 就行，跟线上一致。
 """
+import base64
+import hashlib
+import hmac
 import json
 import os
 import threading
@@ -30,6 +37,10 @@ _TZ = timezone(timedelta(hours=8))
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DIR = os.getenv("FEEDBACK_DIR", "").strip() or os.path.join(_ROOT, "data", "feedback")
 _WEBHOOK = os.getenv("FEEDBACK_WEBHOOK", "").strip()
+# 飞书机器人开了「签名校验」才需要。不填就是没开，照样能发。
+# 建议用签名而不是「自定义关键词」：关键词要求每条消息都含那几个字，
+# 而反馈内容是用户写的，命中不了就被拒（飞书 code 19024）。
+_FEISHU_SECRET = os.getenv("FEISHU_SECRET", "").strip()
 
 # 字段长度上限。用户可能整段粘贴，不截断会把日志和文件撑爆；
 # 但主要信息（问题 + 回答开头 + 选中原因）都在前几百字里，截掉不影响判断。
@@ -89,22 +100,77 @@ def _write_file(rec: Dict) -> bool:
         return False
 
 
+def _webhook_kind(url: str) -> str:
+    """按地址判断是哪家的机器人。
+
+    三家字段名不通用：企业微信和钉钉都是 `msgtype` + `text.content`（恰好一致），
+    飞书是 `msg_type` + `content.text`。填错地址对方只会回一个 4xx，
+    而日志里只看到「发送失败」，很容易误判成网络问题。
+    """
+    u = (url or "").lower()
+    if "feishu.cn" in u or "larksuite.com" in u:
+        return "feishu"
+    if "dingtalk.com" in u:
+        return "dingtalk"
+    # 默认按企业微信处理，兼容以前只配企业微信的老配置
+    return "wecom"
+
+
+def _feishu_sign(secret: str):
+    """飞书签名，算法和常见写法是反的：密钥是「时间戳\\n密钥」，消息体为空。
+
+    时间戳离当前超过 1 小时会被判过期（返回 code 19021），
+    所以这个值必须在发送那一刻算，不能缓存。
+    """
+    ts = str(int(time.time()))
+    key = f"{ts}\n{secret}".encode("utf-8")
+    digest = hmac.new(key, digestmod=hashlib.sha256).digest()
+    return ts, base64.b64encode(digest).decode("utf-8")
+
+
+def _webhook_body(kind: str, text: str) -> bytes:
+    if kind == "feishu":
+        body = {"msg_type": "text", "content": {"text": text}}
+        if _FEISHU_SECRET:
+            ts, sign = _feishu_sign(_FEISHU_SECRET)
+            body["timestamp"] = ts
+            body["sign"] = sign
+        return json.dumps(body, ensure_ascii=False).encode("utf-8")
+    return json.dumps({"msgtype": "text", "text": {"content": text}},
+                      ensure_ascii=False).encode("utf-8")
+
+
 def _post_webhook(rec: Dict) -> None:
     if not _WEBHOOK:
         return
     # 后台线程发，失败只记一行。上报接口的响应时间不能被外部服务拖住——
     # 用户点"提交"后卡三秒，下次就不会再点了。
     def run():
+        kind = _webhook_kind(_WEBHOOK)
         try:
             import urllib.request
-            body = json.dumps({"msgtype": "text", "text": {
-                "content": _format_for_human(rec)}}, ensure_ascii=False).encode("utf-8")
+            body = _webhook_body(kind, _format_for_human(rec))
             req = urllib.request.Request(
                 _WEBHOOK, data=body,
                 headers={"Content-Type": "application/json"}, method="POST")
-            urllib.request.urlopen(req, timeout=5).read()
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                raw = resp.read().decode("utf-8", "replace")
+            # 三家成功都回 HTTP 200，真正的结果在正文里（code / errcode）。
+            # 只看状态码会把「被拒」当成「发成功」，反馈就这么静默丢了。
+            try:
+                j = json.loads(raw or "{}")
+            except Exception:
+                j = {}
+            code = j.get("code", j.get("errcode", 0))
+            if code not in (0, None):
+                print(f"[FB] webhook 被拒 kind={kind} code={code} resp={raw[:200]}")
         except Exception as e:
-            print(f"[FB] webhook 发送失败（忽略）: {e}")
+            detail = ""
+            try:
+                detail = e.read().decode("utf-8", "replace")[:200]
+            except Exception:
+                pass
+            print(f"[FB] webhook 发送失败 kind={kind}: {e} {detail}")
 
     threading.Thread(target=run, daemon=True).start()
 
@@ -190,4 +256,8 @@ def status() -> Dict:
         "dir": _DIR,
         "writable": os.access(os.path.dirname(_DIR) or ".", os.W_OK),
         "webhook": bool(_WEBHOOK),
+        # 配了 webhook 却一直收不到时，先看这两个：
+        # kind 认错了平台（地址不像三家任何一个，默认按企业微信发）就会一直被拒
+        "webhook_kind": _webhook_kind(_WEBHOOK) if _WEBHOOK else "",
+        "feishu_signed": bool(_FEISHU_SECRET) if _WEBHOOK else False,
     }
