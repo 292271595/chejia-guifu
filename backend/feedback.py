@@ -270,10 +270,35 @@ def list_days() -> List[Dict]:
     return out
 
 
+def _writable() -> bool:
+    """真的落一次盘再下结论。
+
+    原来的写法是 `os.access(os.path.dirname(_DIR), os.W_OK)`——检查父目录
+    的权限。但容器里 `data/` 这个目录**是首次写入时才创建的**（`.dockerignore`
+    把它排除了，镜像里根本没有），所以服务刚起来时父目录不存在，
+    `os.access` 一律返回 False。
+
+    结果就是线上 `/health` 恒显示 `writable: false`，看着像「写不进去」，
+    实际保存时 makedirs 一建就好了。排查反馈丢失时这个假警报会直接把方向
+    带到权限问题上，白白绕一圈。
+
+    真判断只有一个办法：建目录、写一个探针文件、删掉。
+    """
+    try:
+        os.makedirs(_DIR, exist_ok=True)
+        probe = os.path.join(_DIR, ".write_probe")
+        with open(probe, "w", encoding="utf-8") as f:
+            f.write("ok")
+        os.remove(probe)
+        return True
+    except Exception:
+        return False
+
+
 def status() -> Dict:
     return {
         "dir": _DIR,
-        "writable": os.access(os.path.dirname(_DIR) or ".", os.W_OK),
+        "writable": _writable(),
         "webhook": bool(_WEBHOOK),
         # 配了 webhook 却一直收不到时，先看这两个：
         # kind 认错了平台（地址不像三家任何一个，默认按企业微信发）就会一直被拒
