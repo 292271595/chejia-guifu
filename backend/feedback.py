@@ -45,9 +45,17 @@ _FEISHU_SECRET = os.getenv("FEISHU_SECRET", "").strip()
 
 # 字段长度上限。用户可能整段粘贴，不截断会把日志和文件撑爆；
 # 但主要信息（问题 + 回答开头 + 选中原因）都在前几百字里，截掉不影响判断。
+#
+# 注意这里的上限是**截断线**，不是**拒收线**——超长一律压缩后照收。
+# 实测事实层答案最长 1048 字（200 题里 P99 是 930），检索层的模型回答可能更长，
+# 所以给到 3000 字：真实答案基本都装得下，装不下的也不会被丢掉，只是压一压。
 MAX_QUESTION = 300
-MAX_ANSWER = 1500
+MAX_ANSWER = 3000
 MAX_NOTE = 500
+
+# 云托管日志采集对单行有长度上限，一行破万字节时整行可能被丢。
+# 日志是反馈的主要留存手段（容器重启文件就没了），所以宁可退化也不能被丢。
+MAX_LOG_BYTES = 8000
 
 # 群消息里愿意带多长的回答。三家积压能力差一个数量级，必须分开算：
 # 飞书、钉钉单条可到 20KB；企业微信 text.content 只有 2048 **字节**，
@@ -86,8 +94,63 @@ def _now() -> datetime:
 
 
 def _cut(s, n: int) -> str:
+    """短字段截断（问题、用户补充）。超长就砍尾巴，这些字段的信息都在开头。"""
     s = str(s or "").strip()
     return s if len(s) <= n else s[:n] + "…"
+
+
+def _trim_middle(s, n: int, tail_ratio: float = 0.35):
+    """把超长文本压到 n 字以内，返回 (文本, 截断信息)。**不拒收**，只压缩。
+
+    为什么不是简单砍尾巴：事实层答案的结构是「结论在前、依据和例外在后」。
+    只留开头会把「哪些车型不适用」「什么情况下例外」整段丢掉——而这些恰恰是
+    最容易答错、也最需要被看到的部分。砍中间只丢过渡和重复论证，信息损失最小。
+
+    返回的截断信息要落进记录，否则事后看日志永远不知道「当时用户看到的到底
+    有多长、我拿到的是不是全的」。
+    """
+    s = str(s or "").strip()
+    total = len(s)
+    if total <= n:
+        return s, None
+    tail = max(1, int(n * tail_ratio))
+    head = max(1, n - tail)
+    cut = total - head - tail
+    text = s[:head].rstrip() + f"\n……（此处省略 {cut} 字）……\n" + s[-tail:].lstrip()
+    return text, {"kept": head + tail, "total": total, "omitted": cut}
+
+
+def _log_record(rec: Dict) -> None:
+    """把整条反馈打成一行日志。**行太长就压缩，不能整行被丢。**
+
+    云托管日志采集对单行有长度上限，破万字节时整行可能静默消失。而日志是反馈
+    最主要的留存手段——`data/feedback/` 在容器里是临时的，重启就没了。所以这一
+    步的优先级是「留下一行」而不是「一行里什么都有」。
+    """
+    line = "[FB] " + json.dumps(rec, ensure_ascii=False)
+    if len(line.encode("utf-8")) <= MAX_LOG_BYTES:
+        _log(line)
+        return
+
+    # 退化为精简行：先砍「可以再查的」长字段，short 字段（原因、补充）保留——
+    # 它们只有几十字，占不了多少预算，却是判断「用户到底不满意什么」的直接依据。
+    slim = {
+        "id": rec.get("id"),
+        "ts": rec.get("ts"),
+        "date": rec.get("date"),
+        "openid": rec.get("openid"),
+        "question": rec.get("question"),
+        "fact_hit": rec.get("fact_hit"),
+        "reason": rec.get("reason"),
+        "reason_label": rec.get("reason_label"),
+        "note": _cut(rec.get("note"), 200),
+        "answer_total": (rec.get("answer_truncated") or {}).get("total"),
+        "slim": True,
+    }
+    budget = max(500, MAX_LOG_BYTES - len(json.dumps(slim, ensure_ascii=False).encode("utf-8")) - 200)
+    slim["answer"] = _fit_bytes(rec.get("answer") or "", budget)
+    line = "[FB] " + json.dumps(slim, ensure_ascii=False)
+    _log(_fit_bytes(line, MAX_LOG_BYTES))
 
 
 def _log(line: str) -> None:
@@ -210,14 +273,17 @@ def _post_webhook(rec: Dict) -> None:
                 j = {}
             code = j.get("code", j.get("errcode", 0))
             if code not in (0, None):
-                print(f"[FB] webhook 被拒 kind={kind} code={code} resp={raw[:200]}")
+                _log(f"[FB] webhook 被拒 kind={kind} code={code} resp={raw[:200]}")
         except Exception as e:
             detail = ""
             try:
                 detail = e.read().decode("utf-8", "replace")[:200]
             except Exception:
                 pass
-            print(f"[FB] webhook 发送失败 kind={kind}: {e} {detail}")
+            # 用 _log 不用 print：这个线程里 stdout 是 ascii 时，
+            # 含中文的 print 会抛 UnicodeEncodeError，线程静默死掉，
+            # 连"发送失败"这行都留不下来——比发送失败本身更难查。
+            _log(f"[FB] webhook 发送失败 kind={kind}: {e} {detail}")
 
     threading.Thread(target=run, daemon=True).start()
 
@@ -236,8 +302,11 @@ def _format_for_human(rec: Dict, kind: str = "wecom") -> str:
     """
     ans = rec.get("answer") or ""
     limit = ANSWER_IN_PUSH.get(kind, 400)
+    total = (rec.get("answer_truncated") or {}).get("total") or len(ans)
     if len(ans) > limit:
-        ans = ans[:limit].rstrip() + f"\n……（原答案 {len(rec.get('answer') or '')} 字，此处截断，全文见日志或导出）"
+        # 头尾都留一点：群消息里只剩开头那几句，经常正好看不到「哪些车型不适用」。
+        ans, _ = _trim_middle(ans, limit, tail_ratio=0.3)
+        ans = ans.rstrip() + f"\n……（原答案 {total} 字，群里只放这么多，全文见日志或导出）"
 
     lines = [
         f"【回答不准确】{rec.get('reason_label') or rec.get('reason') or '未选原因'}",
@@ -272,13 +341,15 @@ def save(payload: Dict, openid: str = "") -> Dict:
         return {"ok": False, "id": "", "reason": "too_many"}
 
     now = _now()
+    # 回答单独处理：超长要保留头尾，不能只砍尾巴（结论在前、例外在后，两头都得留）。
+    answer, cut = _trim_middle(payload.get("answer"), MAX_ANSWER)
     rec = {
         "id": f"{now.strftime('%Y%m%d%H%M%S')}-{os.urandom(3).hex()}",
         "ts": now.strftime("%Y-%m-%d %H:%M:%S"),
         "date": now.strftime("%Y-%m-%d"),
         "openid": openid or "",
         "question": _cut(payload.get("question"), MAX_QUESTION),
-        "answer": _cut(payload.get("answer"), MAX_ANSWER),
+        "answer": answer,
         "resolved_question": _cut(payload.get("resolved_question"), MAX_QUESTION),
         "fact_hit": _cut(payload.get("fact_hit"), 60),
         "degraded": _cut(payload.get("degraded"), 40),
@@ -286,14 +357,20 @@ def save(payload: Dict, openid: str = "") -> Dict:
         "reason_label": _cut(payload.get("reason_label"), 20),
         "note": _cut(payload.get("note"), MAX_NOTE),
     }
+    if cut:
+        # 记下来：事后要是怀疑「答案是不是本来就短」，看这个就知道当时有多长。
+        rec["answer_truncated"] = cut
 
     # 这一行是主要留存手段：日志系统会保存，容器重启也不丢。
     # 要检索就在云托管控制台搜 "[FB] "，整行是合法 JSON，复制出来可直接解析。
-    _log("[FB] " + json.dumps(rec, ensure_ascii=False))
+    _log_record(rec)
 
     _write_file(rec)
     _post_webhook(rec)
-    return {"ok": True, "id": rec["id"], "reason": ""}
+    return {"ok": True, "id": rec["id"], "reason": "",
+            "truncated": bool(cut),
+            "kept": cut["kept"] if cut else len(answer),
+            "total": cut["total"] if cut else len(answer)}
 
 
 def load(day: str) -> List[str]:

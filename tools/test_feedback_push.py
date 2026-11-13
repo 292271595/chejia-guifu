@@ -63,9 +63,11 @@ for kind in ("feishu", "wecom", "dingtalk"):
 txt = fb._format_for_human(make_rec(answer=""), "feishu")
 check("答案为空: 有显式说明", "当时的回答" in txt and "未带上来" in txt)
 
-# ── 3. 长答案要截断并注明，不能把整段塞进去
+# ── 3. 长答案要压缩并注明原长度，不能把整段塞进去，也不能只留开头
 txt = fb._format_for_human(make_rec(answer="答" * 2000), "feishu")
-check("长答案: 已截断并注明", "截断" in txt and len(txt) < 2000 + 300)
+check("长答案: 注明原文长度", "原答案 2000 字" in txt)
+check("长答案: 头尾都留（例外常在末尾）", txt.count("答") > 300)
+check("长答案: 不超过平台额度太多", len(txt) < 2000 + 300)
 
 # ── 4. 各平台字节上限。企业微信 2048 是硬上限，超了整条被拒且只回 4xx
 worst = make_rec(
@@ -104,11 +106,47 @@ fb._DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data",
 fb._WEBHOOK = ""
 res = fb.save({"question": "问" * 5000, "answer": "答" * 5000, "note": "补" * 5000}, openid="oX")
 check("save 成功", res.get("ok") is True)
-lines = fb.load("2026-11-12")
+# 日期要现取：写死日期会让 load 返回空列表，下面几条长度断言就成了
+# 「0 <= 上限」的假绿——实测原来就是这么空跑的。
+_day = fb._now().strftime("%Y-%m-%d")
+lines = fb.load(_day)
+check("保存后有落盘记录", bool(lines))
 got = json.loads(lines[-1]) if lines else {}
 check("问题截到 300 字", len(got.get("question", "")) <= fb.MAX_QUESTION + 1)
-check("答案截到 1500 字", len(got.get("answer", "")) <= fb.MAX_ANSWER + 1)
+check("答案截到上限内", len(got.get("answer", "")) <= fb.MAX_ANSWER + 40)
 check("补充截到 500 字", len(got.get("note", "")) <= fb.MAX_NOTE + 1)
+
+# ── 10. 超长不拒收——线上"答案太长传不上去"那条（2026-11-13）
+#    要求是：能收多少收多少，不许因为长就把整条打回去。
+ans = "头" * 100 + "中" * 4800 + "尾" * 100
+res = fb.save({"question": "考试倒车入库项目时间是多少", "answer": ans,
+               "reason": "incomplete"}, openid="oX")
+check("超长答案: 仍然收下", res.get("ok") is True)
+check("超长答案: 标记 truncated", res.get("truncated") is True)
+check("超长答案: total 是原文长度", res.get("total") == 5000)
+got = json.loads(fb.load(_day)[-1])
+check("超长答案: 记录长度受控", len(got.get("answer", "")) <= fb.MAX_ANSWER + 40)
+check("超长答案: 开头保留", got.get("answer", "").startswith("头头"))
+check("超长答案: 结尾保留（例外和细则在这头）", got.get("answer", "").endswith("尾尾"))
+check("超长答案: 记录里有 answer_truncated",
+      (got.get("answer_truncated") or {}).get("total") == 5000)
+
+# 极端长度：10 万字也不能抛
+res = fb.save({"question": "问", "answer": "答" * 100000, "reason": "other"}, openid="oX")
+check("10 万字: 仍然收下", res.get("ok") is True)
+
+# 日志行不能破万字节——破了容器日志采集会整行丢，而日志是主要留存手段
+captured = []
+_orig_log = fb._log
+fb._log = captured.append
+try:
+    fb._log_record({"id": "x", "ts": "t", "date": "2026-11-12", "openid": "o",
+                    "question": "问" * 300, "answer": "答" * 3000,
+                    "answer_truncated": {"total": 9000}})
+finally:
+    fb._log = _orig_log
+check("日志行不超过上限", bool(captured) and len(captured[-1].encode("utf-8")) <= fb.MAX_LOG_BYTES)
+check("日志行仍是合法 JSON", json.loads(captured[-1].replace("[FB] ", "", 1)).get("answer") is not None)
 
 # 清理测试产生的文件
 try:

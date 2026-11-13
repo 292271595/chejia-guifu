@@ -516,6 +516,11 @@ def submit_feedback(request: FeedbackRequest, http_request: Request):
             return JSONResponse({"success": False, "message": "提交太频繁了，稍后再试。"})
 
         return JSONResponse({"success": True, "id": res["id"],
+                             # 超长不拒收，只压缩。把压缩情况一并发回去，
+                             # 前端和事后排查都能知道「这条是不是全的」。
+                             "truncated": bool(res.get("truncated")),
+                             "kept": res.get("kept"),
+                             "total": res.get("total"),
                              "message": "收到了，谢谢。我们会拿这条去核对法规原文。"})
     except Exception as e:
         import traceback

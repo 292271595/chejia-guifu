@@ -93,8 +93,49 @@ function ask(question, history) {
  * 这个请求永远不该阻塞用户：失败了也 resolve，页面把按钮标成"没传上去"就好，
  * 没必要在他已经不满意的时候再弹一个红色错误框。
  */
+
+// callContainer 的请求体有上限（官方 100KB），超了网关直接拒，
+// 前端只会看到一句「没传上去」，看不出是长度问题。
+// 所以这里按 60KB 兜底：**先压缩再发**，绝不因为长就放弃上报。
+// 事实层答案最长 1048 字（约 3KB），正常永远碰不到这条线；
+// 它防的是检索层偶尔吐出的超长回答，以及用户自己粘贴的大段内容。
+const FB_MAX_BYTES = 60000;
+
+function utf8Len(str) {
+  let n = 0;
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c <= 0xdbff) { n += 4; i += 1; }
+    else n += 3;
+  }
+  return n;
+}
+
+function trimToBytes(str, limit) {
+  if (utf8Len(str) <= limit) return { text: str, cut: false };
+  // 按最坏情况（中文 3 字节）折算字符数，再留 2% 给省略标记，保证折算后一定不超
+  const n = Math.floor(limit * 0.98 / 3);
+  const head = Math.floor(n * 0.7);
+  const tail = Math.max(1, n - head);
+  const omitted = str.length - head - tail;
+  return {
+    text: str.slice(0, head) + '\n……（此处省略 ' + omitted + ' 字）……\n' + str.slice(-tail),
+    cut: true
+  };
+}
+
 function submitFeedback(fb) {
-  return _post('/api/feedback', fb).catch((err) => {
+  const body = Object.assign({}, fb);
+  const trimmed = trimToBytes(body.answer || '', FB_MAX_BYTES);
+  if (trimmed.cut) {
+    // 不弹提示打扰用户：他要的是"报上去"，不是"你的答案太长了"。
+    // 但日志里记一笔，排查时能对上后端的 truncated 标记。
+    console.warn('[feedback] 答案超长，压缩后上报：原 ' + (body.answer || '').length + ' 字');
+    body.answer = trimmed.text;
+  }
+  return _post('/api/feedback', body).catch((err) => {
     // 打成一行纯文本，别只丢一个 Error 对象——真机调试里对象是收起的，
     // 状态码这种关键字段永远看不到。
     console.warn(
