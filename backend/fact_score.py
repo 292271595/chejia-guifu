@@ -550,6 +550,13 @@ def q_study_reduce(q: str) -> Optional[Dict]:
 def q_score(question: str) -> Optional[Dict]:
     """记分总入口：先特殊口径（醉驾/学法减分），再定量（超员/超载/超速），最后定性。"""
     q = norm(question)
+    # 「倒车入库」是科目二考试项目名，不是道路上"不按规定倒车"。
+    # 不让位的话，「倒车入库多少分钟」会被 1 分档那条（need 里含"倒车"）抢走，
+    # 答成"一次记 1 分"——用户问考试时限，系统答违法记分，属于跨域抢答。
+    # 这些词只出现在考场语境（路上不存在"入库""绕桩""单边桥"），整体排除安全。
+    if re.search(r"(倒车入库|倒库|桩考|倒桩|移库|绕桩|侧方停车|侧方位|坡道定点|坡道起步|坡起|"
+                 r"半坡起步|曲线行驶|直角转弯|单边桥|窄路掉头|限宽门)", q):
+        return None
     for special in (q_alcohol_penalty, q_unlicensed, q_fatigue, q_drunk, q_study_reduce):
         r = special(q)
         if r:
