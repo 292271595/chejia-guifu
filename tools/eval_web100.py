@@ -80,23 +80,61 @@ def ensure_chroma_copy():
 
 
 # 事实层答案常主动引用错误说法来做辨析，例如「科目一没有上限……第四十七条的
-# 『不得超过 5 次』原文限定为科目二、科目三」。裸 must_not 会把这种正确对比
-# 判成答错——项目里已经踩过好几次。所以命中处前后若有否定/辨析词就豁免。
-EXEMPT = re.compile(r"(不是|不在其列|只管|限定为|而非|错误|不得|不能|并非|"
-                    r"误|旧规|对比|除外|不适用于|不适用于此|不适用)")
+# 『不得超过 5 次』原文限定为科目二、科目三」。旧版用「命中处 ±26/18 字窗口里
+# 有没有否定词」来豁免，实测漏了 8 条：辨析句常常离命中处更远（「别拿科目三的
+# 数套到科目二上」在后面 30 字），或者踩词根本不在结论里，而在附表、依据、
+# 「记分周期为 12 个月，满分为 12 分」这种背景句里。
+#
+# 2026-11-15 改成**结论区判分**：must 仍全文找（正确结论必须给出），
+# must_not 只在答案的主结论区里判。依据 / 原文引用 / 消歧对比 / 其他项目附表
+# 里出现的忌含词不再算答错——它们本来就是答案主动拿来辨析的。
+# 关键：非结论区命中**要记进结果里并在报告打印**，不静默吞掉，避免"把尺子
+# 放松了却看不出来"。`tools/verify_web100_judge.py` 用明知错的答案反向验证。
+EXEMPT = re.compile(r"(不是|不在其列|只管|只限|仅限|只适用于|限定为|而非|"
+                    r"错误|不得|不能|并非|没有|不必|不用|别|不要|混淆|差在|"
+                    r"误|旧规|对比|除外|不适用于|不适用于此|不适用|另一|其他项目|"
+                    r"两条不同|记分周期为|满分)")
+
+# 结论区最少凑到 30 字：只写「**一次记 6 分。**」的答案首段太短，
+# 要把紧接着的「对应情形」段并进来才有实质内容；凑够 30 字就停。
+# 但**辨析段一律不并**：W003 首段「科目一没有预约次数上限」是对的，
+# 下一段「第四十七条的『不得超过 5 次』原文限定为科目二和科目三」是引用
+# 错误说法做辨析，并进来就会把正确答案判成答错（2026-11-15 实测踩过）。
+_MIN_ZONE = 30
+_CONTRAST_PARA = re.compile(
+    r"(原文限定为|限定为|不在其列|只管|只限|只适用于|依据第|依据：|"
+    r"⚠️|别拿|不要与|混淆|两条不同|记分周期为|满分线|不适用于)")
+
+
+def _conclusion_zone(answer: str) -> str:
+    paras = [p.strip() for p in re.split(r"\n\s*\n", answer.strip()) if p.strip()]
+    if not paras:
+        return answer
+    zone = paras[0]
+    for p in paras[1:]:
+        if len(zone) >= _MIN_ZONE or _CONTRAST_PARA.search(p):
+            break
+        zone += "\n" + p
+    return zone
 
 
 def judge(answer, must, must_not):
+    """返回 (是否通过, 缺失要点, 结论区踩中的错法, 结论区外豁免明细)。"""
     answer = answer or ""
     miss = [p for p in must if not re.search(p, answer)]
-    bad = []
+    zone = _conclusion_zone(answer)
+    bad = [p for p in must_not if re.search(p, zone)]
+    exempted = []
     for p in must_not:
+        if p in bad:
+            continue
         for m in re.finditer(p, answer):
-            ctx = answer[max(0, m.start() - 26): min(len(answer), m.end() + 18)]
-            if not EXEMPT.search(ctx):
-                bad.append(p)
-                break
-    return (not miss and not bad), miss, bad
+            ctx = answer[max(0, m.start() - 40): min(len(answer), m.end() + 30)]
+            exempted.append({"pattern": p, "hit": m.group(0),
+                             "contrast": bool(EXEMPT.search(ctx)),
+                             "ctx": ctx.replace("\n", " ")[:100]})
+            break
+    return (not miss and not bad), miss, bad, exempted
 
 
 ABSTAIN = re.compile(r"(暂无|未收录|无法确定|不在.{0,6}范围|没有相关|建议咨询|无法回答)")
@@ -104,8 +142,12 @@ ABSTAIN = re.compile(r"(暂无|未收录|无法确定|不在.{0,6}范围|没有�
 # 人工逐条复核结论（2026-11-14）。自动判分只是初判，FAIL 里混着
 # 「答案主动引用错误说法做辨析」这类误伤，必须读原文才能定性。
 # 复核依据一律是项目知识库里的现行法规原文，不是网页答案。
+#
+# 2026-11-15：judge 改成结论区判分后，下面这 8 条自动判分也转 PASS，
+# 复核结论保留不删——一是留着「这题原来为什么被误伤」的回溯线索，
+# 二是自动判分口径变了，人工复核这一层仍然要有，不能只信机器。
 VERDICTS = {
-    # —— 断言过严，答案其实正确 ——
+    # —— 断言过严，答案其实正确（2026-11-15 起自动判分也已转 PASS）——
     "W008": ("PASS", "答案明确写「没有 10 日间隔」，踩词来自引用第四十七条原文做辨析"),
     "W009": ("PASS", "10 日/20 日分档正确，踩词来自答案主动提示「科目三是 30 日、别套用」"),
     "W010": ("PASS", "20/30/40 日三档正确，踩词来自「补考间隔 10 日别混」的提示"),
@@ -175,10 +217,11 @@ def run(args):
         except Exception as e:
             answer, layer, titles, degraded = "", "error", [], False
             err = f"{type(e).__name__}: {e}"[:200]
-        ok, miss, bad = judge(answer, q["must"], q["must_not"])
+        ok, miss, bad, exempted = judge(answer, q["must"], q["must_not"])
         row = {
             "id": q["id"], "cat": q["cat"], "q": q["q"], "layer": layer,
-            "ok": ok, "miss": miss, "bad": bad, "sec": round(time.time() - t0, 2),
+            "ok": ok, "miss": miss, "bad": bad, "exempted": exempted,
+            "sec": round(time.time() - t0, 2),
             "answer": answer, "titles": titles, "degraded": degraded,
             "abstain": bool(ABSTAIN.search(answer)), "manual": q["manual"],
             "basis": q["basis"], "err": err,
@@ -226,6 +269,7 @@ def report(args):
     print(f"人工复核后：    {confirmed_graded}/{len(graded)} = {confirmed_graded / max(1, len(graded)) * 100:.1f}%  （可自动判分的 {len(graded)} 题）")
     print(f"全 100 题口径： {confirmed}/{total} = {confirmed / total * 100:.1f}%  （含 3 题人工判）")
     print(f"其中 {fixed_by_review} 条 FAIL 复核后判对（答案主动引用错误说法做辨析，被断言误伤）")
+    print("判分口径：must 全文找；must_not 只在答案的主结论区判（依据/消歧/附表里的引用不算答错）")
     print(f"确认有问题：{len(real_bad)} 条\n")
 
     print("-- 分层（复核后）--")
@@ -261,6 +305,17 @@ def report(args):
     for r in fails:
         v = verdict(r)
         print(f"  {r['id']} {r['q'][:24]:24s} → {v or '未复核'}")
+
+    # 结论区外的忌含词命中必须显式列出，不能静默吞掉——否则「改判分口径」
+    # 和「把尺子放松」在报告上长得一模一样。
+    ex_rows = [r for r in rows if r.get("exempted")]
+    print(f"\n-- 结论区外命中忌含词、已豁免 {len(ex_rows)} 条（逐条可查）--")
+    for r in ex_rows:
+        e = r["exempted"][0]
+        print(f"  {r['id']} {r['q'][:20]:20s} 命中「{e['hit']}」"
+              f"{'（辨析句）' if e['contrast'] else '（无辨析词，需人工看）'}")
+        print(f"      {e['ctx']}")
+
     # 回写复核结论，结果文件自带判词，事后不用重跑也能看
     for r in rows:
         r["verdict"] = verdict(r)
