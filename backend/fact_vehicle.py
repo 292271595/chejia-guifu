@@ -385,6 +385,9 @@ def q_online_year(q: str) -> Optional[Dict]:
 # 四、逾期未检处罚
 # ============================================================
 def q_overdue_inspection(q: str) -> Optional[Dict]:
+    # 用户明确问「是否报废」时，主结论是三个检验周期，不是逾期处罚。
+    if re.search(r"报废", q):
+        return None
     if not re.search(r"(逾期|超期|过期|未按规定|没年检|没检验|不年检)", q):
         return None
     if not re.search(r"(年检|检验|检测)", q):
@@ -415,7 +418,7 @@ def q_overdue_inspection(q: str) -> Optional[Dict]:
 def q_scrap(q: str) -> Optional[Dict]:
     if not re.search(r"(强制报废|报废)", q):
         return None
-    if re.search(r"(连续|几个周期|3个|三个)", q) or "检验" in q:
+    if re.search(r"(连续|几个周期|3个|三个|年检|检验|检测|没检|不检)", q):
         return result(
             "**连续 3 个机动车检验周期内未取得机动车检验合格标志的，应当强制报废。**\n\n"
             "依据：《机动车强制报废标准规定》第四条——已注册机动车在检验有效期届满后"
@@ -541,6 +544,10 @@ def q_vehicle_category(q: str) -> Optional[Dict]:
 # 八、核载人数与准驾车型（9 座 / 中型客车 / 大型客车）
 # ============================================================
 def q_seat(q: str) -> Optional[Dict]:
+    # 座位数只是条件，不等于在问准驾车型。「9座车免检吗／多久年检」必须继续
+    # 向后分派，不能因为先看到「9座」就回答需要 C1。
+    if re.search(r"(年检|检验|检测|检车|车检|验车|审车|上线|免检|报废|过户|转让|转籍)", q):
+        return None
     m = re.search(r"(\d+)\s*座", q)
     if not m:
         return None
@@ -621,8 +628,10 @@ def q_keep_plate(q: str) -> Optional[Dict]:
 
 
 def q_vehicle(question: str) -> Optional[Dict]:
-    for fn in (q_seat, q_vehicle_category, q_relocate, q_transfer, q_scrap, q_overdue_inspection,
-               q_cross_region_inspect, q_online_year, q_exemption, q_inspection_cycle):
+    # 具体的「报废」诉求先于通用的「逾期处罚」；其余分支保持原有顺序。
+    for fn in (q_scrap, q_seat, q_vehicle_category, q_relocate, q_transfer,
+               q_overdue_inspection, q_cross_region_inspect, q_online_year,
+               q_exemption, q_inspection_cycle):
         try:
             r = fn(question)
         except Exception as e:

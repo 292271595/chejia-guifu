@@ -697,9 +697,15 @@ def q_revoke(question: str) -> Optional[Dict]:
 
 def q_internship(question: str) -> Optional[Dict]:
     """实习期：定义 / 高速陪同 / 限制 / 标志 / 是否换证 / 记满12分。"""
-    q = question
-    # 自证相关性：无"实习"二字一律不答
-    if "实习" not in q:
+    q = norm(question)
+    # 「刚拿证就上高速」没有说「实习期」，但初次领证 + 高速已经足以确定语境。
+    # 只允许这个明确组合隐式进入；「刚取得C1能开什么车」「刚拿证多久换证」
+    # 仍分别交给准驾范围和换证处理器。
+    implicit_initial = (
+        re.search(r"(?:刚|才|新)(?:取得|拿到|领到|考取)|初次(?:取得|领取|申领)", q)
+        and re.search(r"(?:高速|快速路)", q)
+    )
+    if "实习" not in q and not implicit_initial:
         return None
     # 子问题优先分派（避免"问标志答定义"）
     sub = ext.q_internship_extra(q)
@@ -1040,16 +1046,17 @@ _HANDLERS = [
     # ── 10. 实习期（含标志/是否换证/高速/限制）──
     # cov 必须含 PENALTY：问「实习期上高速没带老司机怎么罚」是罚则诉求，
     # 不含它就在调度口被挡，处理器进不来，问题掉 RAG 后编出「记6分」。
-    (q_internship, r"实习",
-     {"QUALIFY", "DEFINE", "RESTRICT", "DURATION", "PROCEDURE", "SIGN", "PENALTY"}),
+    (q_internship,
+     r"实习|(?:刚|才|新)(?:取得|拿到|领到|考取)|初次(?:取得|领取|申领)",
+     {"QUALIFY", "DEFINE", "RESTRICT", "DURATION", "VALUE", "PROCEDURE", "SIGN", "PENALTY"}),
     # ── 10.9 考试成绩出分时间（法规无统一口径，诚实弃答）──
     # 必须排在 q_exam 之前：q_exam 的 _not_duration 会把带「成绩/出来」的问句
     # 主动排除，然后一路掉检索层，贴出「第三十二条 科目一考试内容」原文，
     # 答非所问（联网 100 问 W030）。cov 要同时挂 DURATION 和 SUBJECT：
     # 「科目一成绩多久出来」的诉求是这两个，漏一个就在调度口被挡。
     (fact_exam.q_score_release,
-     r"(成绩|分数|出分|考试结果).{0,10}(出来|公布|查到|能查|查询|多久出|什么时候出|几天出)|"
-     r"(多久|什么时候|几天).{0,8}(出成绩|出分|查成绩|知道成绩)",
+     r"(成绩|分数|出分|考试结果).{0,10}(出来|公布|查到|能查|查询|多久出|什么时候出|几天出|知道)|"
+     r"(多久|什么时候|几天).{0,8}(出成绩|出分|查成绩|知道成绩|知道分数)",
      {"DURATION", "SUBJECT"}),
     # ── 11. 考试科目与合格标准 ──
     # 主题词必须含「科四」「安全文明」：口语把安全文明叫科四，只写「科目[一二三四]」
