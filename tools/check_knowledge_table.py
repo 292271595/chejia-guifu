@@ -109,7 +109,43 @@ def check_structure(rows):
 
         if (row.get("status") or "active") not in ("active", "retired"):
             errs.append(f"{rid}: status 只能是 active/retired")
+
+        # verify 是回归保护的唯一来源。缺了它，这行知识点就是「没有任何测试盯着」，
+        # 答案改错也不会有人知道——按结构错误处理，不给静默通过的机会。
+        v = row.get("verify") or {}
+        if not isinstance(v, dict):
+            errs.append(f"{rid}: verify 必须是对象")
+        else:
+            if not (v.get("questions") or []):
+                errs.append(f"{rid}: verify.questions 为空（至少要有一个用于回归的问法）")
+            if not (v.get("must") or []):
+                errs.append(f"{rid}: verify.must 为空（没有判分要素等于没有回归保护）")
+            if not isinstance(v.get("must_not") or [], list):
+                errs.append(f"{rid}: verify.must_not 必须是数组")
     return errs
+
+
+# 法条号：第X条（含中文数字），后面可能跟第Y款/项，这里只取到「条」这一级。
+ARTICLE_RE = re.compile(r"第[一二三四五六七八九十百千零〇\d]+条")
+
+
+def check_citations(rows):
+    """verify.must 里提到的法条号，必须在该行 sources 里出现过。
+
+    这是「结论与依据对账」的机器版：答案写「依据第八十条」，依据列表里却只有
+    第七十六条 —— 语义上可能都对，但读者拿着答案去核对会找不到出处，等于
+    「答案能回到条文」这条约束没落地。机器能查的就别指望人眼。
+    """
+    bad = []
+    for row in rows:
+        rid = row.get("id")
+        titles = " ".join((s.get("title") or "") for s in row.get("sources") or [])
+        must = " ".join((row.get("verify") or {}).get("must") or [])
+        cited = set(ARTICLE_RE.findall(must))
+        absent = sorted(a for a in cited if a not in titles)
+        if absent:
+            bad.append((rid, absent, titles.strip()[:80]))
+    return bad
 
 
 def check_consistency(rows):
@@ -176,7 +212,16 @@ def main():
             for fname, seg in missing[:3]:
                 print(f"    {fname}: 找不到「{seg[:50]}」")
 
-    if errs:
+    cite_bad = check_citations(all_rows)
+    if not cite_bad:
+        print("[法条对账] 通过：判分要素里引的每一条，依据里都能找到")
+    else:
+        print(f"[法条对账] {len(cite_bad)} 行的判分要素引了依据里没有的条文：")
+        for rid, absent, titles in cite_bad:
+            print(f"  {rid}  缺 {absent}")
+            print(f"    依据现有：{titles}")
+
+    if errs or cite_bad:
         return 1
     if bad and args.strict:
         return 1

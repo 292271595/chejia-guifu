@@ -311,20 +311,8 @@ CASES = [
     ("交强险赔不赔肇事逃逸", "INS:ESCAPE"),
     # 法规无统一口径时要明说「没有规定」，不能贴无关原文
     ("科目一成绩多久出来", "EXAM:SCORE_RELEASE"),
-    # ── 2026-11-15 第二轮：6 条被「复核降级成列原文」掩盖的错路由 ──
-    # 判分当时全过，实际事实层答的是另一件事；现在用前置专属处理器接住。
-    # 同时钉死 W069：注销必须是首句主结论，不能埋在后果第 3 条。
-    ("实习期记满12分会怎样", "EDGE:INTERN_FULL12"),
-    ("AB证一个周期没记分还要审验吗", "EDGE:REVIEW_NO_POINT"),
-    ("B2实习期扣了6分会延长实习期吗", "EDGE:INTERN_SIX_POINTS"),
-    ("有C1能直接骑摩托车吗", "EDGE:CAR_LICENSE_MOTO"),
-    ("连续三个检验周期不检会怎样", "EDGE:THREE_CYCLE_SCRAP"),
-    ("摩托车使用多少年报废", "EDGE:MOTO_SCRAP_YEARS"),
-    ("号牌丢了一面还能上路吗", "EDGE:PLATE_MISSING_DRIVE"),
-    # 多轮连问第 3 问「那会注销吗」补全后的问句：此前三个处理器全弃权，
-    # 检索层只捞到第八十条含「注销」的原文，答成「扣满 12 分会注销驾驶证」。
-    ("扣满 12 分会注销驾驶证吗", "EDGE:FULL12_NO_CANCEL"),
-    ("扣满12分会注销吗", "EDGE:FULL12_NO_CANCEL"),
+    # 边界知识点（EDGE:*）的 key / 文案 / 禁语断言不写在这里，
+    # 全部由 data/knowledge_table/edge.json 的 verify 字段生成，见文件末尾。
 ]
 
 # ── 文案内容断言：key 对了不等于话说对了 ──
@@ -490,32 +478,34 @@ CONTENT_CASES = [
     ("科目一成绩多久出来",
      ["没有规定统一", "45 分钟", "学习驾驶证明"],
      ["需参考当地车管所", "科目一考试内容包括"]),
-    # ── 第二轮：只判 key 抓不住「降级列原文」，还要卡住旧错答案的特征句 ──
-    ("实习期记满12分会怎样",
-     ["注销其实习的准驾车型驾驶资格", "第八十条", "满分学习"],
-     ["要走四步：扣证"]),
-    ("AB证一个周期没记分还要审验吗",
-     ["不用审验", "免予本记分周期审验", "第七十二条"],
-     ["该项不记分"]),
-    ("B2实习期扣了6分会延长实习期吗",
-     ["不会延长", "第八十条", "12 个月"],
-     ["实习期延长一年"]),
-    ("有C1能直接骑摩托车吗",
-     ["不能", "D（普通三轮摩托车）", "一次记 9 分"],
-     ["C1（小型汽车）可以初次申领"]),
-    ("连续三个检验周期不检会怎样",
-     ["强制报废", "第四条第四项", "3个机动车检验周期"],
-     ["10 年内每 2 年检验 1 次"]),
-    ("摩托车使用多少年报废",
-     ["正三轮摩托车 12 年", "其他摩托车 13 年", "第五条第十一项"],
-     ["车辆报废要办理"]),
-    ("号牌丢了一面还能上路吗",
-     ["不得上道路行驶", "补领", "一次记 9 分", "第九十五条"],
-     ["补领分2种"]),
-    ("扣满 12 分会注销驾驶证吗",
-     ["不会", "发还机动车驾驶证", "实习期", "第八十条"],
-     ["扣满 12 分会注销驾驶证。"]),
+    # 边界知识点（EDGE:*）的文案断言不写在这里，
+    # 全部由 data/knowledge_table/edge.json 的 verify 字段生成，见下方生成段。
 ]
+
+# ── 知识点表生成的断言：加一行知识点，本文件不用改 ──────────────────
+# 迁移前这 8 条是手写在上面两个列表里的。手写的毛病是同一件事存两处：
+# 答案改了断言不改，测试就退化成「照抄答案」；断言改了答案不改，答案就静默漂移。
+# 现在判分要素只存在表里，测试只负责把表读出来跑一遍。
+#
+# 强制要求：每行必须有 verify.questions 和 verify.must。
+# 只写答案不给判分要素，等于这个知识点没有回归保护——直接报错，不许蒙混过关。
+import knowledge_table as KT
+
+_missing_verify = []
+for _row in KT.load("edge"):
+    _v = _row.get("verify") or {}
+    _qs = _v.get("questions") or []
+    _must = _v.get("must") or []
+    if not _qs or not _must:
+        _missing_verify.append(_row.get("id"))
+        continue
+    for _q in _qs:
+        CASES.append((_q, _row["id"]))
+        CONTENT_CASES.append((_q, _must, _v.get("must_not") or []))
+
+if _missing_verify:
+    print(f"[表] 以下行缺 verify.questions 或 verify.must，未纳入回归：{_missing_verify}")
+    sys.exit(2)
 
 print("=" * 88)
 print(f"{'问句':<30} {'期望':<24} {'实际':<24} 结果")
@@ -558,3 +548,10 @@ for q, must, mustnot in CONTENT_CASES:
         cfail.append((q, (r or {}).get("fact", "（未命中）"), miss, bad))
         print(f"{q:<34} FAIL  缺={miss} 忌={bad} key={(r or {}).get('fact')}")
 print(f"内容断言通过 {cok}/{len(CONTENT_CASES)}")
+
+# 退出码必须反映结果。历史上这个脚本无论多少条 FAIL 都返回 0，
+# 在 CI 或批处理里等于「永远绿」——测试不返回非零，就等于不存在。
+if fail or cfail:
+    print(f"\n[失败] key 断言 {len(fail)} 条、内容断言 {len(cfail)} 条")
+    sys.exit(1)
+sys.exit(0)
