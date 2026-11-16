@@ -525,7 +525,20 @@ def q_add(question: str) -> Optional[Dict]:
             f"ADD:COVERED:{current}->{target}")
 
     if target in ADD_RULES:
-        lines = [f"增驾 **{target}（{name}）** 的条件（第十七条）：", ""]
+        # 用户已经报了手上的证，首句就直接给结论。
+        # 原来首句只是个标题「增驾 B1 的条件（第十七条）：」，用户问「需要几年」，
+        # 真正的「2 年」埋在第二个列表项里——这是金标准冻结集 G05 顶出来的主次问题。
+        head = f"增驾 **{target}（{name}）** 的条件（第十七条）："
+        if current:
+            ys = sorted({y for pres, y, _, _ in ADD_RULES[target] if current in pres})
+            if ys:
+                head = (f"**持 {current}（{LICENSE_TABLE[current]['name']}）增驾 "
+                        f"{target}（{name}），需要持证满 "
+                        f"{' 或 '.join(str(y) for y in ys)} 年以上。**")
+            else:
+                head = (f"**持 {current}（{LICENSE_TABLE[current]['name']}）不能直接增驾 "
+                        f"{target}（{name}）。**")
+        lines = [head, ""]
         for pres, years, cycles, law in ADD_RULES[target]:
             lines.append(f"- 已持 {_fmt_codes(pres)} 满 **{years} 年**以上 → 可增驾 {target}"
                          f"（且申请前最近连续 {cycles} 个记分周期内无记满12分记录）·{law}")
@@ -1250,7 +1263,9 @@ def lookup(question: str, max_len: int = 44) -> Optional[Dict]:
     if _is_multi_demand(q):
         return None
 
-    aspects = detect_aspects(q)
+    # 诉求识别也必须吃归一化句：「残疾人考驾照考啥科目」里的「考啥科目」
+    # 原样识别不出 SUBJECT，诉求闸门直接空集，整句掉检索层。
+    aspects = detect_aspects(norm(q))
     # 调度层用归一化问句匹配主题。不归一的话，「喝了点酒…多久能重新考」
     # 整句不含法规术语，主题正则筛不到吊销处理器，问题掉进 RAG 答「暂无信息」。
     for fn, cov in _candidates(norm(q), aspects):
@@ -1277,7 +1292,9 @@ def audit(question: str) -> List[Dict]:
     这类静默错配只能靠对账发现，属于机制性缺陷，不是单题错误。
     """
     q = question.strip()
-    aspects = detect_aspects(q)
+    # 诉求识别也必须吃归一化句：「残疾人考驾照考啥科目」里的「考啥科目」
+    # 原样识别不出 SUBJECT，诉求闸门直接空集，整句掉检索层。
+    aspects = detect_aspects(norm(q))
     rows = []
     for fn, topic, cov in _HANDLERS:
         if not re.search(topic, q):
@@ -1307,7 +1324,9 @@ def build_fact_hint(question: str) -> Optional[str]:
     诉求不匹配时宁可不注入，也不给模型一条错位的"权威事实"。
     """
     q = question.strip()
-    aspects = detect_aspects(q)
+    # 诉求识别也必须吃归一化句：「残疾人考驾照考啥科目」里的「考啥科目」
+    # 原样识别不出 SUBJECT，诉求闸门直接空集，整句掉检索层。
+    aspects = detect_aspects(norm(q))
     # 调度层用归一化问句匹配主题。不归一的话，「喝了点酒…多久能重新考」
     # 整句不含法规术语，主题正则筛不到吊销处理器，问题掉进 RAG 答「暂无信息」。
     for fn, cov in _candidates(norm(q), aspects):

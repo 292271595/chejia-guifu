@@ -48,6 +48,7 @@ PY = sys.executable
 CHECKS = [
     ("表体检", "check_knowledge_table.py", False, "结构、依据原文、法条对账", []),
     ("表查重", "check_table_overlap.py", False, "新增行是否重复覆盖已有答案", []),
+    ("金标准", "check_golden.py", False, "20 条冻结答案 + 依据原文 + 尺子自检", []),
     ("事实表", "test_fact_table.py", False, "key 断言 + 文案要素断言（含表生成）", []),
     ("判分负向", "verify_web100_judge.py", False, "喂错答案，确认判分器抓得住", []),
     ("抢答回归", "test_penalty_regression.py", False, "该让位的问题没被事实层抢答", []),
