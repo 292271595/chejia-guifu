@@ -1,0 +1,66 @@
+{
+  "meta": {
+    "version": 1,
+    "created_at": "2026-11-17",
+    "rule": "新增入口词/入口短语必须登记在这里：至少两条正向同义问法、至少一条反向守卫问法。正向证明它该接住，反向证明它没有抢别的处理器。只写正向不算登记。",
+    "why": "入口词是最容易复发的一类补丁。只加词不加守卫，回归只能等到旧题被抢答才发现；只测一个问法，也证明不了它覆盖的是一类而不是一句。",
+    "checker": "tools/check_entry_terms.py（已接入 run_all_checks）"
+  },
+  "entries": [
+    {
+      "term": "满分",
+      "handler": "q_full_score",
+      "added_at": "2026-11-17",
+      "why": "省略主语的“满分了怎么办”原先没有处理器认领；但卷面满分是另一件事，必须让位。",
+      "positive": [
+        {"q": "满分了怎么办", "expect": "FULL_SCORE"},
+        {"q": "满分咋办", "expect": "FULL_SCORE"}
+      ],
+      "negative": [
+        {"q": "科目一满分是多少", "expect_not": "FULL_SCORE", "why": "问卷面满分，不是记满12分"}
+      ]
+    },
+    {
+      "term": "一审",
+      "handler": "q_vehicle / q_review",
+      "added_at": "2026-11-17",
+      "why": "口语“几年一审”既可能问车辆检验，也可能问驾驶证审验；只能让带车辆语境的进车辆层。",
+      "positive": [
+        {"q": "金杯9座几年一审", "expect": "VEHICLE:CYCLE"},
+        {"q": "摩托车几年一审", "expect": "VEHICLE:CYCLE"}
+      ],
+      "negative": [
+        {"q": "A1驾驶证几年一审", "expect": "REVIEW:AB", "why": "问驾驶证审验，不能被车辆检验接走"},
+        {"q": "B2还要年审吗", "expect": "REVIEW:AB", "why": "“年审”整体归审验处理器，不进车辆层"}
+      ]
+    },
+    {
+      "term": "骑几年",
+      "handler": "q_moto_scrap_years",
+      "added_at": "2026-11-17",
+      "why": "摩托车年限确认问法原先被注销登记流程抢答；扩的是年限确认，不是所有报废问法。",
+      "positive": [
+        {"q": "摩托车最多骑几年", "expect": "EDGE:MOTO_SCRAP_YEARS"},
+        {"q": "摩托车还能骑几年", "expect": "EDGE:MOTO_SCRAP_YEARS"},
+        {"q": "摩托车能骑多少年", "expect": "EDGE:MOTO_SCRAP_YEARS"},
+        {"q": "摩托车能骑到哪年", "expect": "EDGE:MOTO_SCRAP_YEARS"}
+      ],
+      "negative": [
+        {"q": "摩托车报废怎么办理", "expect": "REG:SCRAP", "why": "问流程仍归注销登记，不能抢成年限题"}
+      ]
+    },
+    {
+      "term": "刚/才拿到证",
+      "handler": "q_internship",
+      "added_at": "2026-11-17",
+      "why": "用户不说“实习期”三个字，也可能在问实习期限制；但刚拿证问准驾范围必须留给车型处理器。",
+      "positive": [
+        {"q": "刚拿到驾驶证可以独自上高速吗", "expect": "INTERNSHIP:HIGHWAY"},
+        {"q": "驾驶证才拿到，高速一个人上行不行", "expect": "INTERNSHIP:HIGHWAY"}
+      ],
+      "negative": [
+        {"q": "刚取得C1能开什么车", "expect": "SCOPE:C1", "why": "问准驾范围，不是实习期限制"}
+      ]
+    }
+  ]
+}

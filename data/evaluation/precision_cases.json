@@ -18,7 +18,16 @@
       "missing_detail": "全文缺少关键条件、范围或例外",
       "forbidden_conclusion": "首段出现明确错误结论",
       "unexpected_abstain": "有确定依据却弃答"
-    }
+    },
+    "blind_rounds": [
+      {
+        "date": "2026-11-17",
+        "ids": "P201-P214",
+        "groups": 12,
+        "note": "新增隐藏组，未参与 2026-11-16/17 两轮修复。首次运行后只作为冻结回归，不再据此逐题修补；若失败，按错误类进入下一轮，并另补未见组做验收。",
+        "basis": "人工依据，未逐条机器核验原文"
+      }
+    ]
   },
   "cases": [
     {
@@ -872,6 +881,318 @@
       "file": "exam_methods.md",
       "quote": "起步时间不应超过30s",
       "basis": "GA 1026—2022 坡道定点停车和起步操作要求"
+    },
+    {
+      "id": "P201",
+      "split": "holdout",
+      "group": "add_c1_a2",
+      "domain": "增驾",
+      "style": "前置车型问年限",
+      "severity": "high",
+      "q": "C1增驾A2要持证几年",
+      "expected_fact": "ADD:A2",
+      "must_head": [
+        "不能直接"
+      ],
+      "must_anywhere": [
+        "B1|B2",
+        "2 年|两年"
+      ],
+      "must_not_head": [
+        "(?<!不)(?:可以|能)直接增驾"
+      ],
+      "basis": "172号令第十七条第三项（人工核对）",
+      "round": "blind_2026-11-17"
+    },
+    {
+      "id": "P202",
+      "split": "holdout",
+      "group": "add_b1_a1",
+      "domain": "增驾",
+      "style": "单车型年限",
+      "severity": "high",
+      "q": "B1增驾A1需要几年",
+      "expected_fact": "ADD:A1",
+      "must_head": [
+        "2 年|两年"
+      ],
+      "must_anywhere": [
+        "B2",
+        "3 年|三年"
+      ],
+      "must_not_head": [
+        "1 年|一年"
+      ],
+      "basis": "172号令第十七条第四项（人工核对）",
+      "round": "blind_2026-11-17"
+    },
+    {
+      "id": "P203",
+      "split": "holdout",
+      "group": "reissue_plate",
+      "domain": "登记号牌",
+      "style": "补领对象明确",
+      "severity": "high",
+      "q": "号牌丢了怎么补",
+      "expected_fact": "REG:REISSUE",
+      "must_head": [
+        "补领|补办"
+      ],
+      "must_anywhere": [
+        "登记地|车辆管理所",
+        "原号牌|作废"
+      ],
+      "must_not_head": [
+        "无法补办|不能补"
+      ],
+      "basis": "164号令牌证补领规定（人工核对）",
+      "round": "blind_2026-11-17"
+    },
+    {
+      "id": "P204",
+      "split": "holdout",
+      "group": "keep_plate",
+      "domain": "登记号牌",
+      "style": "保留条件",
+      "severity": "high",
+      "q": "车辆过户后原号牌能保留多久",
+      "expected_fact": "REG:KEEP_PLATE",
+      "must_head": [
+        "保留|主动申请"
+      ],
+      "must_anywhere": [
+        "2 年|两年",
+        "1 年|一年"
+      ],
+      "must_not_head": [
+        "(?<!不会)自动保留"
+      ],
+      "basis": "机动车登记规定第四十四条（人工核对）",
+      "round": "blind_2026-11-17"
+    },
+    {
+      "id": "P205",
+      "split": "holdout",
+      "group": "age_a2",
+      "domain": "申领年龄",
+      "style": "只问上限",
+      "severity": "high",
+      "q": "A2最大多少岁",
+      "expected_fact": "AGE_APPLY:A2",
+      "must_head": [
+        "63"
+      ],
+      "must_anywhere": [
+        "22"
+      ],
+      "must_not_head": [
+        "65 周岁|65周岁"
+      ],
+      "basis": "172号令第十四条第一项（人工核对）",
+      "round": "blind_2026-11-17"
+    },
+    {
+      "id": "P206",
+      "split": "holdout",
+      "group": "age_c1_upper",
+      "domain": "申领年龄",
+      "style": "有无上限",
+      "severity": "high",
+      "q": "C1最大多少岁",
+      "expected_fact": "AGE_APPLY:C1",
+      "must_head": [
+        "没有年龄上限|无年龄上限|没有上限"
+      ],
+      "must_anywhere": [
+        "18"
+      ],
+      "must_not_head": [
+        "70 周岁|60 周岁"
+      ],
+      "basis": "172号令第十四条（人工核对）",
+      "round": "blind_2026-11-17"
+    },
+    {
+      "id": "P207",
+      "split": "holdout",
+      "group": "inspect_early",
+      "domain": "车辆检验",
+      "style": "办理窗口",
+      "severity": "high",
+      "q": "年检可以提前几个月",
+      "expected_fact": "VEHICLE:INSPECT_EARLY",
+      "must_head": [
+        "3 个月|三个月"
+      ],
+      "must_anywhere": [
+        "检验有效期|有效期满"
+      ],
+      "must_not_head": [
+        "6 个月|半年"
+      ],
+      "basis": "机动车登记规定第五十四条（人工核对）",
+      "round": "blind_2026-11-17"
+    },
+    {
+      "id": "P208",
+      "split": "holdout",
+      "group": "full12_days",
+      "domain": "满分处理",
+      "style": "学习天数",
+      "severity": "high",
+      "q": "记满12分学习几天",
+      "expected_fact": "FULL_SCORE",
+      "must_head": [
+        "7 天|七天"
+      ],
+      "must_anywhere": [
+        "科目一"
+      ],
+      "must_not_head": [
+        "15 天|三十天|30 天"
+      ],
+      "basis": "172号令第十八条（人工核对）",
+      "round": "blind_2026-11-17"
+    },
+    {
+      "id": "P209",
+      "split": "holdout",
+      "group": "contain_b2_c6",
+      "domain": "准驾范围",
+      "style": "车型包含关系",
+      "severity": "high",
+      "q": "B2能开C6吗",
+      "expected_fact": "CONTAIN:B2->C6",
+      "must_head": [
+        "不能"
+      ],
+      "must_anywhere": [
+        "C6",
+        "轻型牵引挂车"
+      ],
+      "must_not_head": [
+        "可以开|能开"
+      ],
+      "basis": "172号令附件1准驾车型（人工核对）",
+      "round": "blind_2026-11-17"
+    },
+    {
+      "id": "P210",
+      "split": "holdout",
+      "group": "review_c1",
+      "domain": "审验",
+      "style": "非AB类审验",
+      "severity": "high",
+      "q": "C1驾驶证几年一审",
+      "expected_fact": "REVIEW:NONAB",
+      "must_head": [
+        "不需要|没有.*审验|没有固定"
+      ],
+      "must_anywhere": [
+        "A1|A2|B1|B2",
+        "换证"
+      ],
+      "must_not_head": [
+        "(?<!不需要)每年审验",
+        "(?<!没有)两年一审"
+      ],
+      "basis": "172号令第七十二条（人工核对）",
+      "round": "blind_2026-11-17"
+    },
+    {
+      "id": "P211",
+      "split": "holdout",
+      "group": "cross_inspect",
+      "domain": "车辆检验",
+      "style": "异地办理",
+      "severity": "medium",
+      "q": "异地年检需要委托书吗",
+      "expected_fact": "VEHICLE:CROSS_INSPECT",
+      "must_head": [
+        "不需要|不必|全国通检"
+      ],
+      "must_anywhere": [
+        "委托书|登记地"
+      ],
+      "must_not_head": [
+        "需要委托书"
+      ],
+      "basis": "公交管〔2022〕295号及放管服措施（人工核对）",
+      "round": "blind_2026-11-17"
+    },
+    {
+      "id": "P212",
+      "split": "holdout",
+      "group": "multi_b1",
+      "domain": "多轮追问",
+      "style": "换车型追问",
+      "severity": "high",
+      "q": "那B1呢",
+      "history": [
+        {
+          "role": "user",
+          "content": "A1能开什么车"
+        },
+        {
+          "role": "assistant",
+          "content": "A1可以驾驶大型客车等"
+        }
+      ],
+      "expected_fact": "SCOPE:B1",
+      "must_head": [
+        "B1|中型客车"
+      ],
+      "must_anywhere": [
+        "中型载客|核载"
+      ],
+      "must_not_head": [
+        "大型客车"
+      ],
+      "basis": "172号令附件1准驾车型（人工核对）",
+      "round": "blind_2026-11-17"
+    },
+    {
+      "id": "P213",
+      "split": "holdout",
+      "group": "compound_inspect_exempt",
+      "domain": "复合问句",
+      "style": "两个车辆诉求",
+      "severity": "high",
+      "q": "年检能提前几个月，还有9座车免检吗",
+      "expected_fact": "MULTI:VEHICLE:INSPECT_EARLY+VEHICLE:EXEMPT",
+      "must_head": [
+        "3 个月|三个月"
+      ],
+      "must_anywhere": [
+        "免检",
+        "9 座|9座"
+      ],
+      "must_not_head": [
+        "6 个月|半年"
+      ],
+      "basis": "机动车登记规定第五十四条＋公交管〔2022〕295号（人工核对）",
+      "round": "blind_2026-11-17"
+    },
+    {
+      "id": "P214",
+      "split": "holdout",
+      "group": "add_c1_a3",
+      "domain": "增驾",
+      "style": "无年限要求",
+      "severity": "medium",
+      "q": "C1增驾A3要几年",
+      "expected_fact": "ADD:A3",
+      "must_head": [
+        "没有持证年限要求|没有.*年限"
+      ],
+      "must_anywhere": [
+        "A3|城市公交车"
+      ],
+      "must_not_head": [
+        "满 3 年|满三年"
+      ],
+      "basis": "172号令第十七条（人工核对）",
+      "round": "blind_2026-11-17"
     }
   ]
 }

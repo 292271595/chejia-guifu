@@ -17,10 +17,12 @@ from pydantic import BaseModel
 
 import concurrent.futures
 import re
+import time
 
 from rag_engine import RAGEngine, create_rag_engine
 import security
 import feedback
+import query_log
 
 
 # ============ .env 加载（零依赖，密钥不进代码不进仓库） ============
@@ -282,6 +284,27 @@ class QueryRequest(BaseModel):
 
 @app.post("/api/query")
 def query(request: QueryRequest, http_request: Request):
+    """问答入口：只负责计时与全量观测，业务逻辑保持原样。
+
+    观测必须包在整个路由外层，而不是只记成功分支。超时、降级、拒答、
+    参数错误和鉴权失败同样是真实分布的一部分；漏了它们，分母又会失真。
+    """
+    t0 = time.perf_counter()
+    response = _query_route(request, http_request)
+    try:
+        query_log.log_response(
+            question=(request.question or "").strip(),
+            response=response,
+            elapsed_ms=int((time.perf_counter() - t0) * 1000),
+            history_turns=len(request.history or []),
+        )
+    except Exception as e:
+        # 观测是旁路，不能把问答打挂；但失败要留痕。
+        print(f"[QL] 埋点失败（不影响问答）: {e}")
+    return response
+
+
+def _query_route(request: QueryRequest, http_request: Request):
     if not rag_engine:
         return JSONResponse({
             "success": False,

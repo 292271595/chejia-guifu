@@ -27,6 +27,8 @@ miniprogram/project.private.config.json
 
 # 用户反馈原始数据：含 openid 与提问原文，只在机器上留，不进仓库
 data/feedback/
+# 全量问句原始日志：含提问原文，只在机器上留，不进仓库
+data/query_log/
 
 # 联网 100 问评测用的向量库副本（约 28MB，脚本会自动重建，不进仓库）
 data/_eval_chroma_tmp/
