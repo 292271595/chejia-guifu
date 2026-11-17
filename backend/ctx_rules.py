@@ -211,6 +211,16 @@ def _usable_ctx(text: str) -> str:
     return p
 
 
+# 考试项目名（科目二各项目）：追问「侧方停车呢」是在**换项目**，
+# 不是给上句加话题。实测「倒车入库几分钟」→「侧方停车呢」被话题追加补成
+# 「侧方停车 科目二倒车入库几分钟」，两个项目名都在句子里，查表答的还是
+# 倒车入库——用户问侧方停车，答成倒车入库，而且答案看着完全正常。
+# 项目名和项目名之间必须做替换，语义上等同于「那 B2 呢」换车型。
+_EXAM_ITEMS = ("倒车入库", "侧方停车", "坡道定点停车和起步", "坡道定点",
+               "曲线行驶", "直角转弯", "限宽门", "通过单边桥", "起伏路",
+               "窄路掉头", "桩考")
+
+
 def _try_r1(q: str, prev: str) -> str:
     """换主语：把上句的主语换成这句的实体。
 
@@ -223,6 +233,15 @@ def _try_r1(q: str, prev: str) -> str:
     """
     if not prev:
         return ""
+
+    # 考试项目名换考试项目名：直接替换，不追加。
+    t_q = _strip_tail(_strip_head(_bare(q)))
+    for item in _EXAM_ITEMS:
+        if t_q == item:
+            for old in _EXAM_ITEMS:
+                if old != item and old in prev:
+                    return prev.replace(old, item, 1)
+            break
 
     ent = _entity_of(q)
     if not ent:
@@ -416,11 +435,19 @@ def build_candidates(q: str, history: List[Dict]) -> List[Dict]:
 
 
 def rule_resolve(question: str, history) -> Dict:
-    """规则层入口。命中则完全不需要模型。"""
+    """规则层入口。命中则完全不需要模型。
+
+    容错：若 history 末尾的 user 句就是当前问句（前端把当前轮也拼进历史的
+    写法），先摘掉再找上下文——否则「那 B2 呢」会被当成上一句，R1 因
+    「实体已在句中」而弃权，整层规则白写。
+    """
     res = {"status": "skip", "question": "", "rule": "", "reason": "",
            "candidates": []}
 
     h = _norm_history(history)
+    if h and h[-1]["role"] == "user" \
+            and h[-1]["content"].strip() == (question or "").strip():
+        h = h[:-1]
     if not h:
         res["reason"] = "无历史"
         return res

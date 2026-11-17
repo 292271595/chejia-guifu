@@ -1,11 +1,13 @@
 {
   "meta": {
-    "version": 1,
+    "version": 2,
     "created_at": "2026-11-16",
+    "updated_at": "2026-11-17",
     "purpose": "独立精准挑战集：分别检查理解路由、首段主结论、必要细节和错误结论，不再用全文关键词命中代替精准。",
     "split_rule": "dev 用于日常发现与修复；holdout 只在阶段验收时运行。同一 group 的所有问法必须处于同一 split，防止同一考点换说法后泄漏到两边。holdout 一旦查看失败明细并据此修复，就不得继续冒充完全未见数据，下一阶段须补新的考点组。",
     "result_rule": "expected_fact 精确约束路由；must_head 只查首段；must_anywhere 查全文必要细节；must_not_head 只查首段错误结论，避免消歧段误伤。",
     "basis_rule": "有 file 和 quote 的条目由执行器到知识库逐字核对；没有 quote 的条目仍须给 basis，但只算人工依据，不能冒充机器已核验。",
+    "history_rule": "带 history 的条目是多轮追问题：快速链路先走 ctx_rules 规则补全（不调模型），--full 走线上完整改写链。出题要挑规则层接得住的形态；规则层接不住的追问留给 --full 阶段验收。",
     "error_labels": {
       "exception": "执行异常",
       "no_answer": "空答案",
@@ -28,9 +30,16 @@
       "severity": "high",
       "q": "我C1本儿，想骑踏板摩托，直接就能骑吗",
       "expected_fact": "EDGE:CAR_LICENSE_MOTO",
-      "must_head": ["不能"],
-      "must_anywhere": ["D/E/F", "9\\s*分"],
-      "must_not_head": ["可以|能直接骑"],
+      "must_head": [
+        "不能"
+      ],
+      "must_anywhere": [
+        "D/E/F",
+        "9\\s*分"
+      ],
+      "must_not_head": [
+        "可以|能直接骑"
+      ],
       "basis": "driving_license.md 附件1；traffic_violations.md 第九条第五项"
     },
     {
@@ -42,9 +51,16 @@
       "severity": "high",
       "q": "驾驶证才拿到，高速一个人上行不行",
       "expected_fact": "INTERNSHIP:HIGHWAY",
-      "must_head": ["必须|应当|需要", "陪同"],
-      "must_anywhere": ["3\\s*年|三年"],
-      "must_not_head": ["可以独自|能独自|一个人可以"],
+      "must_head": [
+        "必须|应当|需要",
+        "陪同"
+      ],
+      "must_anywhere": [
+        "3\\s*年|三年"
+      ],
+      "must_not_head": [
+        "可以独自|能独自|一个人可以"
+      ],
       "wrong_head": "刚拿驾驶证也可以一个人上高速。",
       "file": "driving_license.md",
       "quote": "驾驶人在实习期内驾驶机动车上高速公路行驶，应当由持相应或者包含其准驾车型驾驶证3年以上的驾驶人陪同。",
@@ -59,9 +75,15 @@
       "severity": "medium",
       "q": "C1增驾B1，持证时间得够几年",
       "expected_fact": "ADD:B1",
-      "must_head": ["2\\s*年|二年"],
-      "must_anywhere": ["记分周期"],
-      "must_not_head": ["3\\s*年|三年"],
+      "must_head": [
+        "2\\s*年|二年"
+      ],
+      "must_anywhere": [
+        "记分周期"
+      ],
+      "must_not_head": [
+        "3\\s*年|三年"
+      ],
       "wrong_head": "C1 增驾 B1 需要持证满 3 年。",
       "file": "driving_license.md",
       "quote": "申请增加中型客车（B1）准驾车型的，已取得驾驶城市公交车（A3）、大型货车（B2）、小型汽车（C1）、小型自动挡汽车（C2）、低速载货汽车（C3）或者三轮汽车（C4）准驾车型资格2年以上",
@@ -76,9 +98,16 @@
       "severity": "high",
       "q": "三年不年检会强制报废吗",
       "expected_fact": "VEHICLE:SCRAP",
-      "must_head": ["连续\\s*3\\s*个|连续\\s*三个", "强制报废"],
-      "must_anywhere": ["不是\\s*3\\s*年|不是\\s*三年|3\\s*个检验周期"],
-      "must_not_head": ["逾期未年检.*处罚"],
+      "must_head": [
+        "连续\\s*3\\s*个|连续\\s*三个",
+        "强制报废"
+      ],
+      "must_anywhere": [
+        "不是\\s*3\\s*年|不是\\s*三年|3\\s*个检验周期"
+      ],
+      "must_not_head": [
+        "逾期未年检.*处罚"
+      ],
       "wrong_head": "只要三年不年检，所有车辆都一律强制报废。",
       "file": "vehicle_scrap_standard.md",
       "quote": "第四条  已注册机动车有下列情形之一的应当强制报废……（四）在检验有效期届满后连续3个机动车检验周期内未取得机动车检验合格标志的。",
@@ -93,9 +122,16 @@
       "severity": "medium",
       "q": "科目一考完多久知道分数",
       "expected_fact": "EXAM:SCORE_RELEASE",
-      "must_head": ["当场|考试结束"],
-      "must_anywhere": ["没有.*统一|无统一", "不.*具体天数|不给具体天数"],
-      "must_not_head": ["3\\s*个工作日|三个工作日"],
+      "must_head": [
+        "当场|考试结束"
+      ],
+      "must_anywhere": [
+        "没有.*统一|无统一",
+        "不.*具体天数|不给具体天数"
+      ],
+      "must_not_head": [
+        "3\\s*个工作日|三个工作日"
+      ],
       "wrong_head": "科目一成绩统一在 3 个工作日后公布。",
       "basis": "法规未规定统一出分时限；考试系统当场判定属于实务说明，不能编具体天数"
     },
@@ -108,9 +144,17 @@
       "severity": "high",
       "q": "肇事逃逸了，保险是不是都不赔",
       "expected_fact": "INS:ESCAPE",
-      "must_head": ["交强险", "赔"],
-      "must_anywhere": ["商业", "合同|条款"],
-      "must_not_head": ["保险.{0,6}(?:都|一律).{0,4}不赔"],
+      "must_head": [
+        "交强险",
+        "赔"
+      ],
+      "must_anywhere": [
+        "商业",
+        "合同|条款"
+      ],
+      "must_not_head": [
+        "保险.{0,6}(?:都|一律).{0,4}不赔"
+      ],
       "wrong_head": "肇事逃逸后，交强险和商业保险都一律不赔。",
       "file": "compulsory_insurance_regulation.md",
       "quote": "被保险机动车发生道路交通事故造成本车人员、被保险人以外的受害人人身伤亡、财产损失的，由保险公司依法在机动车交通事故责任强制保险责任限额范围内予以赔偿。",
@@ -125,9 +169,15 @@
       "severity": "high",
       "q": "我喝醉开营运车被吊销，几年后能再考",
       "expected_fact": "REVOKE:10",
-      "must_head": ["10\\s*年|十年"],
-      "must_anywhere": ["营运"],
-      "must_not_head": ["5\\s*年|五年|取决于吊销原因"],
+      "must_head": [
+        "10\\s*年|十年"
+      ],
+      "must_anywhere": [
+        "营运"
+      ],
+      "must_not_head": [
+        "5\\s*年|五年|取决于吊销原因"
+      ],
       "wrong_head": "醉酒驾驶营运机动车被吊销后 5 年就能重新申请。",
       "file": "driving_license.md",
       "quote": "醉酒驾驶营运机动车依法被吊销机动车驾驶证未满10年的；",
@@ -142,9 +192,16 @@
       "severity": "high",
       "q": "喝酒开车撞死人构成犯罪，多久能再考",
       "expected_fact": "REVOKE:FOREVER",
-      "must_head": ["终生|终身"],
-      "must_anywhere": ["重大交通事故|重大事故", "犯罪"],
-      "must_not_head": ["5\\s*年|五年|10\\s*年|十年"],
+      "must_head": [
+        "终生|终身"
+      ],
+      "must_anywhere": [
+        "重大交通事故|重大事故",
+        "犯罪"
+      ],
+      "must_not_head": [
+        "5\\s*年|五年|10\\s*年|十年"
+      ],
       "wrong_head": "饮酒驾驶致人死亡构成犯罪，5 年后可以重新考驾驶证。",
       "file": "driving_license.md",
       "quote": "（四）饮酒后或者醉酒驾驶机动车发生重大交通事故构成犯罪的；",
@@ -159,9 +216,16 @@
       "severity": "high",
       "q": "驾照过期一年半没换，被注销了，还能恢复吗",
       "expected_fact": "RECOVER:OPEN",
-      "must_head": ["还能恢复|可以恢复"],
-      "must_anywhere": ["科目一", "2\\s*年|二年"],
-      "must_not_head": ["不能恢复|重新报考全部"],
+      "must_head": [
+        "还能恢复|可以恢复"
+      ],
+      "must_anywhere": [
+        "科目一",
+        "2\\s*年|二年"
+      ],
+      "must_not_head": [
+        "不能恢复|重新报考全部"
+      ],
       "basis": "driving_license.md 第七十九条第三款"
     },
     {
@@ -173,9 +237,15 @@
       "severity": "medium",
       "q": "B2一个周期一分没有，还要去年审不",
       "expected_fact": "REVIEW:AB",
-      "must_head": ["免予|免审|不需要|不用"],
-      "must_anywhere": ["第七十二条"],
-      "must_not_head": ["仍需|仍要|必须参加"],
+      "must_head": [
+        "免予|免审|不需要|不用"
+      ],
+      "must_anywhere": [
+        "第七十二条"
+      ],
+      "must_not_head": [
+        "仍需|仍要|必须参加"
+      ],
       "file": "driving_license.md",
       "quote": "但在1个记分周期内没有记分记录的，免予本记分周期审验。",
       "basis": "第七十二条第三款"
@@ -189,9 +259,16 @@
       "severity": "high",
       "q": "车牌只剩一块还能凑合开吗",
       "expected_fact": "EDGE:PLATE_MISSING_DRIVE",
-      "must_head": ["不得|不能|不可以"],
-      "must_anywhere": ["9\\s*分", "补领"],
-      "must_not_head": ["可以.*上路|能.*上路"],
+      "must_head": [
+        "不得|不能|不可以"
+      ],
+      "must_anywhere": [
+        "9\\s*分",
+        "补领"
+      ],
+      "must_not_head": [
+        "可以.*上路|能.*上路"
+      ],
       "basis": "road_traffic_safety_law.md 第九十五条；traffic_violations.md 第九条第四项"
     },
     {
@@ -203,9 +280,16 @@
       "severity": "high",
       "q": "记满12分是不是驾照就注销了",
       "expected_fact": "EDGE:FULL12_NO_CANCEL",
-      "must_head": ["不会|不注销"],
-      "must_anywhere": ["扣留", "科目一"],
-      "must_not_head": ["会注销|应当注销"],
+      "must_head": [
+        "不会|不注销"
+      ],
+      "must_anywhere": [
+        "扣留",
+        "科目一"
+      ],
+      "must_not_head": [
+        "会注销|应当注销"
+      ],
       "basis": "traffic_violations.md 第十七条、第二十三条；普通满分与实习期注销分开"
     },
     {
@@ -217,9 +301,16 @@
       "severity": "high",
       "q": "实习期记满12分是不是只学习考试就行",
       "expected_fact": "EDGE:INTERN_FULL12",
-      "must_head": ["注销"],
-      "must_anywhere": ["满分学习", "并行|不是二选一"],
-      "must_not_head": ["只.*学习.*就行|不会注销"],
+      "must_head": [
+        "注销"
+      ],
+      "must_anywhere": [
+        "满分学习",
+        "并行|不是二选一"
+      ],
+      "must_not_head": [
+        "只.*学习.*就行|不会注销"
+      ],
       "basis": "driving_license.md 第八十条；driving_work_standard.md 第九十四条"
     },
     {
@@ -231,9 +322,17 @@
       "severity": "medium",
       "q": "一只眼睛看不见，还能申请C1吗",
       "expected_fact": "PHYSICAL:monocular",
-      "must_head": ["可以申请|符合条件"],
-      "must_anywhere": ["5\\.0", "150", "C5"],
-      "must_not_head": ["不能申请|不得申请"],
+      "must_head": [
+        "可以申请|符合条件"
+      ],
+      "must_anywhere": [
+        "5\\.0",
+        "150",
+        "C5"
+      ],
+      "must_not_head": [
+        "不能申请|不得申请"
+      ],
       "file": "driving_license.md",
       "quote": "单眼视力障碍，优眼裸视力或者矫正视力达到对数视力表5.0以上，且水平视野达到150度的，可以申请小型汽车（C1）、小型自动挡汽车（C2）、低速载货汽车（C3）、三轮汽车（C4）、残疾人专用小型自动挡载客汽车（C5）",
       "basis": "第十四条第二项第2目"
@@ -247,9 +346,15 @@
       "severity": "medium",
       "q": "考科目二倒车入库，限时几分钟",
       "expected_fact": "EXAM:ITEM_TIME",
-      "must_head": ["3\\.5|3\\s*分\\s*30|三分半"],
-      "must_anywhere": ["超过.*不合格"],
-      "must_not_head": ["没有.*时间|无.*时限"],
+      "must_head": [
+        "3\\.5|3\\s*分\\s*30|三分半"
+      ],
+      "must_anywhere": [
+        "超过.*不合格"
+      ],
+      "must_not_head": [
+        "没有.*时间|无.*时限"
+      ],
       "file": "exam_methods.md",
       "quote": "项目完成时间不应超过3.5min。",
       "basis": "倒车入库操作要求"
@@ -263,10 +368,271 @@
       "severity": "high",
       "q": "电动自行车到底要不要驾照",
       "expected_fact": "VEHICLE:CATEGORY",
-      "must_head": ["不需要驾驶证"],
-      "must_anywhere": ["D/E/F", "登记上牌", "当地"],
-      "must_not_head": ["必须持.*驾驶证|都要驾驶证"],
+      "must_head": [
+        "不需要驾驶证"
+      ],
+      "must_anywhere": [
+        "D/E/F",
+        "登记上牌",
+        "当地"
+      ],
+      "must_not_head": [
+        "必须持.*驾驶证|都要驾驶证"
+      ],
       "basis": "vehicle_standards.md GB 17761；driving_license.md 准驾车型；登记要求按当地规定"
+    },
+    {
+      "id": "P017",
+      "split": "dev",
+      "group": "compound_seat_cycle",
+      "domain": "复合问句",
+      "style": "多诉求混句+指代",
+      "severity": "high",
+      "q": "C1能开9座金杯吗，这车几年一审",
+      "expected_fact": "MULTI:VEHICLE:SEAT+VEHICLE:CYCLE",
+      "must_head": [
+        "一、",
+        "C1",
+        "可以驾驶|能。"
+      ],
+      "must_anywhere": [
+        "每\\s*2\\s*年|第\\s*6\\s*年",
+        "二、"
+      ],
+      "must_not_head": [
+        "不能驾驶|不可以"
+      ],
+      "wrong_head": "C1 不能驾驶 9 座客车。",
+      "basis": "GA 802—2019 车型分类；公交管〔2022〕295号检验周期（人工核对）"
+    },
+    {
+      "id": "P018",
+      "split": "dev",
+      "group": "compound_intern_full",
+      "domain": "复合问句",
+      "style": "逗号两问",
+      "severity": "high",
+      "q": "实习期上高速要人陪不，记满12分怎么办",
+      "expected_fact": "MULTI:INTERNSHIP:HIGHWAY+FULL_SCORE",
+      "must_head": [
+        "一、",
+        "陪同"
+      ],
+      "must_anywhere": [
+        "12\\s*分",
+        "7\\s*天",
+        "科目一",
+        "二、"
+      ],
+      "must_not_head": [
+        "可以独自|不用陪|不需要陪"
+      ],
+      "wrong_head": "实习期上高速一个人开就行，不用人陪。",
+      "file": "driving_license.md",
+      "quote": "驾驶人在实习期内驾驶机动车上高速公路行驶，应当由持相应或者包含其准驾车型驾驶证3年以上的驾驶人陪同。",
+      "basis": "第七十七条第二款；163号令第十七条、第十八条"
+    },
+    {
+      "id": "P019",
+      "split": "dev",
+      "group": "compound_exempt_online",
+      "domain": "复合问句",
+      "style": "显式还有+省略主语",
+      "severity": "medium",
+      "q": "非营运9座车免检吗，还有几年上线一次",
+      "expected_fact": "MULTI:VEHICLE:EXEMPT+VEHICLE:ONLINE_YEAR",
+      "must_head": [
+        "一、",
+        "免检"
+      ],
+      "must_anywhere": [
+        "9\\s*座",
+        "第\\s*6\\s*年|第\\s*10\\s*年",
+        "二、"
+      ],
+      "must_not_head": [
+        "7\\s*座及以下"
+      ],
+      "file": "vehicle_inspection_current.md",
+      "quote": "非营运小微型载客汽车（9座及以下，不含面包车）",
+      "basis": "公交管〔2022〕295号"
+    },
+    {
+      "id": "P020",
+      "split": "dev",
+      "group": "full_score_omitted",
+      "domain": "满分处理",
+      "style": "省略主语",
+      "severity": "high",
+      "q": "满分了怎么办",
+      "expected_fact": "FULL_SCORE",
+      "must_head": [
+        "12\\s*分|十二分"
+      ],
+      "must_anywhere": [
+        "7\\s*天",
+        "科目一"
+      ],
+      "must_not_head": [
+        "注销|吊销"
+      ],
+      "wrong_head": "记满 12 分驾驶证直接注销。",
+      "basis": "163号令第十七条、第十八条、第二十二条（人工核对）"
+    },
+    {
+      "id": "P021",
+      "split": "dev",
+      "group": "exam_side_park_time",
+      "domain": "考试",
+      "style": "项目换问",
+      "severity": "medium",
+      "q": "科目二侧方停车限几分钟",
+      "expected_fact": "EXAM:ITEM_TIME",
+      "must_head": [
+        "侧方停车",
+        "1\\s*分\\s*30|90\\s*秒|1\\.5"
+      ],
+      "must_anywhere": [
+        "2\\s*分钟|重型牵引"
+      ],
+      "must_not_head": [
+        "没有.*时限|3\\.5"
+      ],
+      "file": "exam_methods.md",
+      "quote": "项目完成时间重型牵引挂车不应超过2min，其他车型不应超过1.5min",
+      "basis": "GA 1026—2022 侧方停车操作要求"
+    },
+    {
+      "id": "P022",
+      "split": "dev",
+      "group": "multi_b2",
+      "domain": "多轮追问",
+      "style": "换主语",
+      "severity": "high",
+      "history": [
+        {
+          "role": "user",
+          "content": "C1能开什么车"
+        },
+        {
+          "role": "assistant",
+          "content": "C1可以开小型汽车、小型自动挡汽车等"
+        }
+      ],
+      "q": "那B2呢",
+      "expected_fact": "SCOPE:B2",
+      "must_head": [
+        "B2|大型货车"
+      ],
+      "must_anywhere": [
+        "重型|载货"
+      ],
+      "must_not_head": [
+        "不能驾驶|无法驾驶"
+      ],
+      "wrong_head": "B2（大型货车）不能驾驶任何载货汽车。",
+      "basis": "172号令附件1（人工核对）"
+    },
+    {
+      "id": "P023",
+      "split": "dev",
+      "group": "multi_sidepark",
+      "domain": "多轮追问",
+      "style": "换考试项目",
+      "severity": "medium",
+      "history": [
+        {
+          "role": "user",
+          "content": "科目二倒车入库限时几分钟"
+        },
+        {
+          "role": "assistant",
+          "content": "倒车入库项目完成时间不应超过3.5分钟"
+        }
+      ],
+      "q": "侧方停车呢",
+      "expected_fact": "EXAM:ITEM_TIME",
+      "must_head": [
+        "侧方停车",
+        "1\\s*分\\s*30|90\\s*秒|1\\.5"
+      ],
+      "must_not_head": [
+        "倒车入库"
+      ],
+      "basis": "GA 1026—2022（人工核对）",
+      "must_anywhere": []
+    },
+    {
+      "id": "P024",
+      "split": "dev",
+      "group": "multi_revoke_years",
+      "domain": "多轮追问",
+      "style": "换谓词",
+      "severity": "high",
+      "history": [
+        {
+          "role": "user",
+          "content": "醉驾被抓了会怎么样"
+        },
+        {
+          "role": "assistant",
+          "content": "醉驾会被吊销驾驶证，5年内不得重新申请"
+        }
+      ],
+      "q": "几年能再考",
+      "expected_fact": "REVOKE:5",
+      "must_head": [
+        "5\\s*年"
+      ],
+      "must_not_head": [
+        "10\\s*年|终生|终身"
+      ],
+      "file": "driving_license.md",
+      "quote": "醉酒驾驶机动车或者饮酒后驾驶营运机动车依法被吊销机动车驾驶证未满5年的；",
+      "basis": "第十五条第五项",
+      "must_anywhere": []
+    },
+    {
+      "id": "P025",
+      "split": "dev",
+      "group": "moto_scrap_confirm",
+      "domain": "车辆报废",
+      "style": "年限确认",
+      "severity": "high",
+      "q": "摩托车13年报废吗",
+      "expected_fact": "EDGE:MOTO_SCRAP_YEARS",
+      "must_head": [
+        "12\\s*年|13\\s*年|十二"
+      ],
+      "must_anywhere": [
+        "13\\s*年|十二"
+      ],
+      "must_not_head": [
+        "注销登记|流程"
+      ],
+      "file": "vehicle_scrap_standard.md",
+      "quote": "（十一）正三轮摩托车使用12年，其他摩托车使用13年。",
+      "basis": "第五条第十一项"
+    },
+    {
+      "id": "P026",
+      "split": "dev",
+      "group": "moto_scrap_howlong",
+      "domain": "车辆报废",
+      "style": "多久报废",
+      "severity": "medium",
+      "q": "摩托车多久报废",
+      "expected_fact": "EDGE:MOTO_SCRAP_YEARS",
+      "must_head": [
+        "12\\s*年|13\\s*年|十二"
+      ],
+      "must_not_head": [
+        "注销登记|流程"
+      ],
+      "file": "vehicle_scrap_standard.md",
+      "quote": "（十一）正三轮摩托车使用12年，其他摩托车使用13年。",
+      "basis": "第五条第十一项",
+      "must_anywhere": []
     },
     {
       "id": "P101",
@@ -277,9 +643,13 @@
       "severity": "high",
       "q": "开车没看红灯直接闯过去，会记多少分",
       "expected_fact": "SCORE:6",
-      "must_head": ["6\\s*分"],
+      "must_head": [
+        "6\\s*分"
+      ],
       "must_anywhere": [],
-      "must_not_head": ["3\\s*分|2\\s*分"],
+      "must_not_head": [
+        "3\\s*分|2\\s*分"
+      ],
       "file": "traffic_violations.md",
       "quote": "第十条 机动车驾驶人有下列交通违法行为之一，一次记6分：……（八）驾驶机动车不按交通信号灯指示通行的；",
       "basis": "第十条第八项"
@@ -293,9 +663,13 @@
       "severity": "high",
       "q": "喝了酒开车，被抓一次要记多少分",
       "expected_fact": "SCORE:12",
-      "must_head": ["12\\s*分"],
+      "must_head": [
+        "12\\s*分"
+      ],
       "must_anywhere": [],
-      "must_not_head": ["6\\s*分|9\\s*分"],
+      "must_not_head": [
+        "6\\s*分|9\\s*分"
+      ],
       "file": "traffic_violations.md",
       "quote": "第八条 机动车驾驶人有下列交通违法行为之一，一次记12分：……（一）饮酒后驾驶机动车的；",
       "basis": "第八条第一项"
@@ -309,9 +683,13 @@
       "severity": "medium",
       "q": "刚取得C1，实习期一共几个月",
       "expected_fact": "INTERNSHIP",
-      "must_head": ["12\\s*个月|十二个月"],
+      "must_head": [
+        "12\\s*个月|十二个月"
+      ],
       "must_anywhere": [],
-      "must_not_head": ["6\\s*个月|24\\s*个月"],
+      "must_not_head": [
+        "6\\s*个月|24\\s*个月"
+      ],
       "file": "driving_license.md",
       "quote": "机动车驾驶人初次取得汽车类准驾车型或者初次取得摩托车类准驾车型后的12个月为实习期。",
       "basis": "第七十六条"
@@ -325,9 +703,13 @@
       "severity": "medium",
       "q": "驾驶证快到期了，最早提前多少天换证",
       "expected_fact": "RENEW:BEFORE_90",
-      "must_head": ["90\\s*日|90\\s*天|九十日"],
+      "must_head": [
+        "90\\s*日|90\\s*天|九十日"
+      ],
       "must_anywhere": [],
-      "must_not_head": ["60\\s*日|30\\s*日"],
+      "must_not_head": [
+        "60\\s*日|30\\s*日"
+      ],
       "file": "driving_license.md",
       "quote": "机动车驾驶人应当于机动车驾驶证有效期满前90日内",
       "basis": "第六十三条"
@@ -342,9 +724,13 @@
       "severity": "high",
       "q": "醉酒开私家车被吊销，禁考几年",
       "expected_fact": "REVOKE:5",
-      "must_head": ["5\\s*年|五年"],
+      "must_head": [
+        "5\\s*年|五年"
+      ],
       "must_anywhere": [],
-      "must_not_head": ["10\\s*年|十年"],
+      "must_not_head": [
+        "10\\s*年|十年"
+      ],
       "file": "driving_license.md",
       "quote": "醉酒驾驶机动车或者饮酒后驾驶营运机动车依法被吊销机动车驾驶证未满5年的；",
       "basis": "第十五条第五项"
@@ -358,9 +744,16 @@
       "severity": "medium",
       "q": "非营运9座小客车还在免检范围里吗",
       "expected_fact_prefix": "VEHICLE:EXEMPT",
-      "must_head": ["免检"],
-      "must_anywhere": ["9\\s*座|九座", "非营运"],
-      "must_not_head": ["7\\s*座及以下"],
+      "must_head": [
+        "免检"
+      ],
+      "must_anywhere": [
+        "9\\s*座|九座",
+        "非营运"
+      ],
+      "must_not_head": [
+        "7\\s*座及以下"
+      ],
       "file": "vehicle_inspection_current.md",
       "quote": "非营运小微型载客汽车（9座及以下，不含面包车）",
       "basis": "车检改革意见整理稿；9座属于范围，面包车和营运车另算"
@@ -374,9 +767,13 @@
       "severity": "medium",
       "q": "限宽门最多允许多少秒",
       "expected_fact": "EXAM:ITEM_TIME",
-      "must_head": ["30\\s*秒|0\\.5\\s*分钟"],
+      "must_head": [
+        "30\\s*秒|0\\.5\\s*分钟"
+      ],
       "must_anywhere": [],
-      "must_not_head": ["没有.*时间|无.*时限"],
+      "must_not_head": [
+        "没有.*时间|无.*时限"
+      ],
       "file": "exam_methods.md",
       "quote": "车辆依次从三门之间穿越，穿越过程中不应碰擦悬杆。项目完成时间不应超过0.5min。",
       "basis": "通过限宽门操作要求"
@@ -390,12 +787,91 @@
       "severity": "high",
       "q": "多少岁能申请A1，最大到多少岁",
       "expected_fact": "AGE_APPLY:A1",
-      "must_head": ["22", "63"],
+      "must_head": [
+        "22",
+        "63"
+      ],
       "must_anywhere": [],
-      "must_not_head": ["65\\s*周岁|20\\s*周岁"],
+      "must_not_head": [
+        "65\\s*周岁|20\\s*周岁"
+      ],
       "file": "driving_license.md",
       "quote": "申请大型客车（A1）、重型牵引挂车（A2）准驾车型的，在22周岁以上，63周岁以下；",
       "basis": "第十四条第一项第6目"
+    },
+    {
+      "id": "P109",
+      "split": "holdout",
+      "group": "multi_c6",
+      "domain": "多轮追问",
+      "style": "换主语",
+      "severity": "medium",
+      "history": [
+        {
+          "role": "user",
+          "content": "A2能开什么车"
+        },
+        {
+          "role": "assistant",
+          "content": "A2可以驾驶重型牵引挂车等"
+        }
+      ],
+      "q": "那C6呢",
+      "expected_fact": "SCOPE:C6",
+      "must_head": [
+        "C6|轻型牵引挂车"
+      ],
+      "must_anywhere": [
+        "4500"
+      ],
+      "must_not_head": [
+        "A2"
+      ],
+      "basis": "172号令附件1（人工核对）"
+    },
+    {
+      "id": "P110",
+      "split": "holdout",
+      "group": "compound_moto_scrap_cycle",
+      "domain": "复合问句",
+      "style": "显式还有+省略主语",
+      "severity": "high",
+      "q": "摩托车多久报废，还有几年一审",
+      "expected_fact": "MULTI:EDGE:MOTO_SCRAP_YEARS+VEHICLE:CYCLE",
+      "must_head": [
+        "一、",
+        "12\\s*年|13\\s*年|十二"
+      ],
+      "must_anywhere": [
+        "每\\s*2\\s*年|第\\s*6\\s*年",
+        "二、"
+      ],
+      "must_not_head": [
+        "注销登记|流程"
+      ],
+      "file": "vehicle_scrap_standard.md",
+      "quote": "（十一）正三轮摩托车使用12年，其他摩托车使用13年。",
+      "basis": "强制报废标准第五条第十一项；公交管〔2022〕295号"
+    },
+    {
+      "id": "P111",
+      "split": "holdout",
+      "group": "exam_slope_time",
+      "domain": "考试",
+      "style": "项目时限",
+      "severity": "medium",
+      "q": "科目二坡道定点起步最长几秒",
+      "expected_fact": "EXAM:ITEM_TIME",
+      "must_head": [
+        "30\\s*秒"
+      ],
+      "must_anywhere": [],
+      "must_not_head": [
+        "没有.*时限"
+      ],
+      "file": "exam_methods.md",
+      "quote": "起步时间不应超过30s",
+      "basis": "GA 1026—2022 坡道定点停车和起步操作要求"
     }
   ]
 }

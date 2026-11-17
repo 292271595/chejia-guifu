@@ -65,6 +65,17 @@ def validate_bank(data):
         if c.get("split") not in ("dev", "holdout"):
             errors.append(f"{cid}: split 只能是 dev/holdout")
         group_splits[c.get("group")].add(c.get("split"))
+        hist = c.get("history")
+        if hist is not None:
+            if not isinstance(hist, list) or not hist:
+                errors.append(f"{cid}: history 必须是非空列表")
+            else:
+                for j, h in enumerate(hist):
+                    if not isinstance(h, dict) or h.get("role") not in ("user", "assistant") \
+                            or not (h.get("content") or "").strip():
+                        errors.append(f"{cid}: history[{j}] 需要 role(user/assistant) 和非空 content")
+                    elif h.get("role") == "user" and h["content"].strip() == (c.get("q") or "").strip():
+                        errors.append(f"{cid}: history 末轮 user 句与当前问句相同（改写层会摘掉，但题面不该这么写）")
         if not (c.get("expected_fact") or c.get("expected_fact_prefix") or c.get("expected_route")):
             errors.append(f"{cid}: 必须声明 expected_fact、expected_fact_prefix 或 expected_route")
         for field in ("must_head", "must_anywhere", "must_not_head"):
@@ -153,6 +164,27 @@ def route_errors(c, actual_fact):
     elif expected_route == "rag" and actual_fact:
         labels.append("unexpected_fact")
     return labels
+
+
+def _fast_query(c, FT):
+    """快速链路的多轮题：先走规则补全（ctx_rules，毫秒级不调模型），补不上再问原句。
+
+    与线上链路的差别要写清楚：线上在规则层之后还有模型补全兜底；快速链路
+    没有模型，规则没接住的追问只按原句查表。所以多轮题要挑规则层接得住的
+    形态出题；规则接不住的留给 --full 阶段验收。
+    返回 (result, resolved_question)。
+    """
+    q, hist = c["q"], c.get("history")
+    if not hist:
+        return FT.lookup(q), ""
+    try:
+        import ctx_rules
+        rr = ctx_rules.rule_resolve(q, hist)
+        if rr.get("status") == "resolved":
+            return FT.lookup(rr["question"]), rr["question"]
+    except Exception:
+        pass
+    return FT.lookup(q), ""
 
 
 def evaluate(c, result, err=""):
@@ -249,6 +281,8 @@ def print_failures(rows, show):
     print("\n失败清单：")
     for r in bad[:show]:
         print(f"  {r['id']} [{r['primary']}] {r['q']}")
+        if r.get("resolved_q"):
+            print(f"      规则补全 → {r['resolved_q']}")
         print(f"      期望 {r['expected_fact']}｜实际 {r['actual_fact'] or '走检索层'}")
         if r["miss_head"]:
             print(f"      首段缺：{r['miss_head']}")
@@ -303,14 +337,21 @@ def main():
     rows = []
     for i, c in enumerate(cases, 1):
         err = ""
+        resolved_q = ""
         try:
-            result = engine.query(c["q"], top_k=6, budget=12) if engine else FT.lookup(c["q"])
+            if engine:
+                result = engine.query(c["q"], top_k=6, budget=12, history=c.get("history"))
+            else:
+                result, resolved_q = _fast_query(c, FT)
         except Exception as e:
             result, err = None, f"{type(e).__name__}: {e}"[:240]
         row = evaluate(c, result, err)
+        if resolved_q:
+            row["resolved_q"] = resolved_q
         rows.append(row)
+        tail = f" -> {resolved_q}" if resolved_q else ""
         print(f"[{i:2d}/{len(cases)}] {'OK  ' if row['ok'] else 'FAIL'} {c['id']} "
-              f"{row['actual_fact'] or 'RAG'} {c['q']}")
+              f"{row['actual_fact'] or 'RAG'} {c['q']}{tail}")
 
     summarize(rows)
     print_failures(rows, args.show)

@@ -1013,7 +1013,8 @@ _HANDLERS = [
     # 12 分怎么处理」整类漏到 RAG。分值本身交给处理器判档（>12 必是累积，
     # ≤12 再验措辞），调度层只管"这句话里带了个记分数值"。
     (ext.q_full_score,
-     r"(?:记满|满|扣|记|累积|累计|达到|已经).{0,4}\d{1,3}\s*分|满分(?:教育|学习)|十二分",
+     r"(?:记满|满|扣|记|累积|累计|达到|已经).{0,4}\d{1,3}\s*分|满分(?:教育|学习)|十二分"
+     r"|满分(?![是多少多])",
      {"PROCEDURE", "SUBJECT", "PENALTY", "SCORE", "VALUE", "DEFINE", "DURATION"}),
     # ── 6. 吊销后重考期限（口语"继续考/还能考/什么时候能考"也必须接住）──
     # 必须早于记分处理器：醉驾致死/逃逸致罪这类问句若被记分模板抢答，
@@ -1098,8 +1099,12 @@ _HANDLERS = [
      {"QUALIFY", "DURATION", "PROCEDURE", "LIST", "VALUE"}),
     (fact_vehicle.q_vehicle,
      r"(年检|检验|检测|检车|车检|验车|审车|上线|免检|报废|二手车|过户|转让|转籍|迁出|迁入|迁到|迁往|平移|提档|调档|"
-     r"电动|电摩|核载|座|检一次|几年检)",
+     r"电动|电摩|核载|座|检一次|几年检|(?:摩托车|车|座|牌|载客|载货|非营运).{0,6}一审)",
      {"DURATION", "LIST", "PENALTY", "PROCEDURE", "QUALIFY", "VALUE", "SIGN"}),
+    # ↑ 「一审」= 口语「几年一审」，但必须带车辆语境（车/座/摩托在附近）。
+    #   裸「一审」会让「A1驾驶证几年一审」这类**驾驶证审验**问题被车辆处理器
+    #   接走、答成检验周期——regression 抓到过。刻意不加「年审」：年审的归属
+    #   是 q_review。事故类处理器都在本条之前，「一审判决」不会漏进来。
     # ── 12.5 行政业务：审验 / 备案 / 身体状况变化 / 校车 / 境外军队换证 ──
     (fact_admin.q_review, r"(审验|年审|一审|每年审)", {"DURATION", "PROCEDURE"}),
     (fact_admin.q_overdue_review, r"审验", {"PENALTY"}),
@@ -1208,6 +1213,166 @@ def _is_multi_demand(q: str) -> bool:
     return False
 
 
+# ── 复合问句拆分（2026-11-17）──
+# 「一句话里问两件事」以前只有一道闸门：多诉求一律退回检索层。实测这等于把
+# 「半答案」变成「碰运气」——「C1能开9座金杯吗，还有这车几年一审」整句掉
+# RAG，两个问题一个都没答上；「实习期上高速要人陪不，记分影响增驾吗」被
+# 单个处理器抢走，只答了后半个。用户要的是两件都答。
+# 新语义：拆成子问句逐个查表，**全部子问都确定性命中才合并作答**；有一半
+# 答不了就维持旧语义——显式多诉求（并且/另外/还有…）仍整句退回 RAG，
+# 逗号复合退回整句走单问调度。宁可维持现状，不给新的半答案。
+
+# 分句的疑问标记：判断一个分句是不是在提问（陈述段不是子问题）
+_ASK_HINT = re.compile(
+    r"(吗|呢|嘛|啥|咋|什么|几|多少|多久|多长|怎么|怎样|如何|为什么|为啥|哪|"
+    r"能不能|可不可以|要不要|会不会|有没有|是不是|行不行)")
+
+# 指代开头（这车/那证/这本/这块牌）：后半句的主语在首句里
+_ANAPHORA_RE = re.compile(r"^(这|那)(辆|块|个)?(车|证|本|牌)")
+
+# 分句自带主体的标志：车型码、证件/车辆、业务动作
+_OWN_SUBJECT_RE = re.compile(
+    r"(A[123]|B[12]|C[1-6]|[DEFNPM])|"
+    r"(驾驶证|驾照|行驶证|登记证书|号牌|车牌|机动车|车辆|摩托车|电动车|科目[一二三四])|"
+    r"(换证|补证|补办|年检|年审|一审|检验|免检|报废|注销|吊销|暂扣|记分|记满|"
+    r"审验|实习期|增驾|申领|考试|过户|转让|转籍|抵押|保险|责任|逃逸|醉驾|"
+    r"饮酒|超速|闯红灯|恢复|延期|学法减分|违章|违法)")
+
+_SEAT_RE = re.compile(r"(\d+)\s*座")
+_DOC_RE = re.compile(r"(驾驶证|驾照|行驶证|登记证书|号牌|车牌|牌照|摩托车|电动车|"
+                     r"面包车|小客车|客车|货车|大巴|出租车|校车|机动车|汽车)")
+_CONJ_CUT_RE = re.compile(r"(并且|另外|同时|顺便|以及|然后|还有|；|;|？|\?)")
+
+
+def _is_questionlike(seg: str) -> bool:
+    """分句是不是在提问。疑问词、问号、还是「…要人陪不」这类「不」字收尾。"""
+    t = (seg or "").strip().rstrip("。！？，！?~…")
+    if not t:
+        return False
+    if _ASK_HINT.search(t):
+        return True
+    return t.endswith("不")
+
+
+def _split_explicit(q: str) -> Optional[List[str]]:
+    """按显式并列词/分号/问号分句。返回 None 表示没有显式分隔点。
+
+    「还有」沿用 _is_multi_demand 的判法：后面跟「吗/没」的是「是否仍然有」
+    （免检资格还有吗），不是并列的第二问，不当分隔点。
+    """
+    cuts = []
+    for m in _CONJ_CUT_RE.finditer(q):
+        if m.group(1) == "还有":
+            tail = q[m.end():m.end() + 2]
+            if tail.startswith(("吗", "没")):
+                continue
+        cuts.append((m.start(), m.end()))
+    if not cuts:
+        return None
+    parts, prev = [], 0
+    for s, e in cuts:
+        parts.append(q[prev:s])
+        prev = e
+    parts.append(q[prev:])
+    parts = [p.strip(" ，,、") for p in parts]
+    parts = [p for p in parts if p]
+    return parts if len(parts) >= 2 else None
+
+
+# 名词性主体（车型码、证件、车辆、科目、分值）：有它分句才真正立得住。
+# 业务动作词（一审/记分/增驾）不算——「几年一审」光有动作没有对象，
+# 必须从首句补一个主体进来才查得了表。
+_FILL_KEEP_RE = re.compile(
+    r"(A[123]|B[12]|C[1-6]|[DEFNPM])|"
+    r"(驾驶证|驾照|行驶证|登记证书|号牌|车牌|牌照|证件|机动车|车辆|摩托车|电动车|汽车|科目[一二三四])|"
+    r"(\d{1,3}\s*分)|(\d+\s*座)|(记满|满分|累积|累计)")
+
+# 纯疑问尾巴（怎么办/要多久/多少钱）：单独出现时不知道在问什么，
+# 硬补一个对象进去只会让查表答非所问，不如让它自然落空。
+_PURE_TAIL_RE = re.compile(r"^[几多少久长天日月年时秒分钱怎么怎样办弄去搞啥为什么为啥哪要不要能不能会不会可以不行有没]{2,10}$")
+
+
+def _fill_subject(part: str, head: str) -> str:
+    """后半句缺主体时，用首句出现的对象补。补不出来就原样返回（查表自然失败）。
+
+    指代（这车/这证）优先处理：哪怕分句里有业务词（这车几年一审），对象
+    仍然没落地，不替换的话查表查不到座位数/证件，只能整句漏掉。
+    「几年一审」这类只有动作没有对象的分句，把首句的名词主体提到句首。
+    填充材料只来自用户自己的话，不引入模型、不会幻觉。
+    """
+    p = (part or "").strip()
+    if not p or _PURE_TAIL_RE.match(p):
+        return p
+    seat = _SEAT_RE.search(head)
+    doc = _DOC_RE.search(head)
+    code = extract_codes(head)
+    m = _ANAPHORA_RE.match(p)
+    if m:
+        if seat:
+            return _ANAPHORA_RE.sub(f"{seat.group(1)}座车", p, count=1)
+        if doc:
+            return _ANAPHORA_RE.sub(doc.group(1), p, count=1)
+        if code:
+            return _ANAPHORA_RE.sub(code[0], p, count=1)
+        return p
+    if _FILL_KEEP_RE.search(p):
+        return p
+    if seat:
+        return f"{seat.group(1)}座 {p}"
+    if code:
+        return f"{code[0]} {p}"
+    if doc:
+        return f"{doc.group(1)} {p}"
+    return p
+
+
+def _split_multi(q: str):
+    """把复合问句拆成子问句。返回 (子问句列表或 None, 是否显式多诉求)。
+
+    显式并列（并且/另外/还有/分号/多问号）：只要每段都是问句就拆；
+    含陈述段的（「喝了酒开车，另外要记多少分」第一段是语境不是问题）维持
+    旧闸门语义，整句退回 RAG。
+    逗号复合：额外要求每段各自带主体（或可由首句填充），防止把
+    「驾照过期一年半没换，被注销了，还能恢复吗」这类「语境+问题」误拆。
+    """
+    parts = _split_explicit(q)
+    if parts:
+        if not all(_is_questionlike(p) for p in parts):
+            return None, True
+        parts = [parts[0]] + [_fill_subject(p, parts[0]) for p in parts[1:]]
+        return parts, True
+    if q.count("，") + q.count(",") in (1, 2):
+        segs = [s.strip() for s in re.split(r"[，,]", q) if s.strip()]
+        if 2 <= len(segs) <= 3 and all(_is_questionlike(s) for s in segs):
+            segs = [segs[0]] + [_fill_subject(s, segs[0]) for s in segs[1:]]
+            if all(_OWN_SUBJECT_RE.search(s) for s in segs):
+                return segs, False
+    return None, False
+
+
+def _merge_multi(parts: List[str], results: List[Dict]) -> Dict:
+    """合并多个子答案。首段必须包含第一个子问的结论，不能只给一句「分开说」。"""
+    zh = ("一", "二", "三")
+    secs = [f"**{zh[i]}、{p}：**\n{r['answer']}" for i, (p, r) in enumerate(zip(parts, results))]
+    sources, seen = [], set()
+    for r in results:
+        for s in (r.get("sources") or []):
+            key = (s.get("title"), s.get("source"))
+            if key not in seen:
+                seen.add(key)
+                sources.append(s)
+    covers = set()
+    for r in results:
+        covers |= set(r.get("covers") or ())
+    return {
+        "answer": "\n\n".join(secs),
+        "sources": sources,
+        "fact": "MULTI:" + "+".join(r.get("fact") or "?" for r in results),
+        "match": "multi_split(" + "+".join(r.get("match") or "?" for r in results) + ")",
+        "covers": frozenset(covers),
+    }
+
+
 # ── 制度必要条件守卫（2026-11-04 线上事故后加）──
 # 事实层靠"关键词命中"决定答哪一问，同一个词跨两个制度时必然答串，
 # 而且串出来的结论可能正好相反：
@@ -1255,11 +1420,37 @@ def lookup(question: str, max_len: int = 44) -> Optional[Dict]:
     """
     确定性查表。命中返回 {'answer','sources','fact'}，否则 None（交回 RAG）。
 
-    三道闸门（v2 核心，专治"答非所问"）：
+    闸门（v2 核心，专治"答非所问"）：
     1. 主题闸门 —— 处理器必须自带主题正则命中；
     2. 诉求闸门 —— 用户的子诉求（科目/罚则/清单/流程/期限/数值）必须被处理器覆盖；
-    3. 复杂度闸门 —— 过长、多问句、多诉求（并且/另外/同时）不直答。
+    3. 复杂度闸门 —— 过长、多问句、多诉求（并且/另外/同时）不直答；
+       例外（2026-11-17）：复合问句能**全部子问确定性命中**时，拆开分别作答
+       再合并（见 _split_multi）；只答得出一半的，维持退回语义，不给半答案。
     """
+    q = question.strip()
+    if not q:
+        return None
+    if len(q) > max_len:
+        return None
+    parts, explicit = _split_multi(q)
+    if parts:
+        rs = [_lookup_single(p, max_len) for p in parts]
+        if all(rs):
+            # 两个子问其实是同一考点换个问法（「多少岁能申请A1，最大到多少岁」
+            # 两边都命中 AGE_APPLY:A1）：合并只会得到重复冗长的答案，
+            # 一个答案本来就能同时回答两问，直接给单答案。
+            if len({r.get("fact") for r in rs}) == 1:
+                return _finalize(rs[0])
+            return _finalize(_merge_multi(parts, rs))
+        if explicit:
+            # 显式多诉求只答得出一半 → 维持旧闸门：整句交回 RAG
+            return None
+        # 逗号复合拆不满 → 退回整句走单问调度（维持旧行为）
+    return _lookup_single(q, max_len)
+
+
+def _lookup_single(question: str, max_len: int = 44) -> Optional[Dict]:
+    """单问句的查表主流程（复合问句拆出的子问也走这里，不再二次拆分）。"""
     q = question.strip()
     if not q:
         return None

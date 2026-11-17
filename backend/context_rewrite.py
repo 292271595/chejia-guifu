@@ -431,6 +431,11 @@ def resolve(question: str, history: Optional[List[Dict]], client, model: str,
         return res
 
     h = _norm_history(history)
+    # 容错：前端若把当前问句也拼进 history，会在这里被摘掉——
+    # 否则改写 prompt 里这句出现两遍，且 need_resolve 的判定会被带偏。
+    if h and h[-1]["role"] == "user" \
+            and h[-1]["content"].strip() == (question or "").strip():
+        h = h[:-1]
     if not h:
         res.update(reason="无历史", skipped=True)
         return res
