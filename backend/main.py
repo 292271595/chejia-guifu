@@ -565,6 +565,31 @@ def _feedback_authed(token: str) -> bool:
     return hmac.compare_digest((token or "").encode(), FEEDBACK_TOKEN.encode())
 
 
+@app.get("/api/query/logs/export")
+def export_query_logs(day: str = "", token: str = ""):
+    """按天导出全量问句日志（JSONL）。
+
+    为什么需要这个接口：云托管日志只留 7 天，容器可写层在重新发布时会清空。
+    没有主动导出，真实问句就永远攒不起来，"按真实频次排优先级"也就无从谈起。
+
+    没有配置 QUERY_LOG_DIR 时，日志只打 stdout、没有文件可导，这里明确返回
+    404 并说明原因，而不是回一个空列表让人误以为"今天没人提问"。
+    """
+    if not _feedback_authed(token):
+        return JSONResponse({"success": False, "message": "口令不对或未配置"},
+                            status_code=403)
+    if not query_log._log_dir():
+        return JSONResponse({
+            "success": False,
+            "message": "未配置 QUERY_LOG_DIR，日志只在 stdout（云端保留 7 天），"
+                       "请先给服务加该环境变量再发布。",
+        }, status_code=404)
+    if not day:
+        return JSONResponse({"success": True, "days": query_log.list_days()})
+    lines = query_log.load(day)
+    return PlainTextResponse("\n".join(lines), media_type="application/x-ndjson")
+
+
 @app.get("/api/feedback/export")
 def export_feedback(day: str = "", token: str = ""):
     """按天导出原始 JSONL。没配 FEEDBACK_TOKEN 时按 404 处理。"""

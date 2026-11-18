@@ -66,6 +66,25 @@ def main():
                 if key not in rows[0]:
                     errors.append(f"记录缺字段 {key}")
 
+        # 导出能力：没这两件，日志只能在云端留 7 天，"积累"是句空话
+        os.environ["QUERY_LOG_DIR"] = tmp
+        days = query_log.list_days()
+        if days != [recs[0]["ts"][:10]]:
+            errors.append(f"导出日期列表不对：{days}")
+        if len(query_log.load(days[0])) != len(cases):
+            errors.append("按天导出条数与落盘不一致")
+        if query_log.load("../etc/passwd") or query_log.load("2026-1-1"):
+            errors.append("非法日期没有被挡住（存在路径穿越风险）")
+
+        # 重复拉取不能翻倍
+        import pull_query_logs  # noqa: E402
+        target = os.path.join(tmp, "pull.jsonl")
+        text = "\n".join(json.dumps(r, ensure_ascii=False) for r in rows)
+        first = pull_query_logs.merge_into(target, text)
+        second = pull_query_logs.merge_into(target, text)
+        if (first, second) != (len(rows), 0):
+            errors.append(f"合并去重失效：首次 {first} 条、重复 {second} 条")
+
         summary = query_log_report.summarize(rows)
         if summary["total"] != len(cases):
             errors.append("统计分母不等于原始记录数")

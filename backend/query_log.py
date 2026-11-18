@@ -115,6 +115,36 @@ def build_record(question: str, payload: dict, status_code: int = 200,
     }
 
 
+def list_days() -> list:
+    """已落盘的日期列表（升序）。没配 QUERY_LOG_DIR 时为空。"""
+    directory = _log_dir()
+    if not directory or not os.path.isdir(directory):
+        return []
+    out = []
+    for name in os.listdir(directory):
+        if name.endswith(".jsonl") and len(name) == 16:
+            out.append(name[:-6])
+    return sorted(out)
+
+
+def load(day: str) -> list:
+    """按天读取原始行。只允许 YYYY-MM-DD，防止路径穿越。"""
+    day = (day or "").strip()
+    if not day or len(day) != 10:
+        return []
+    directory = _log_dir()
+    if not directory:
+        return []
+    path = os.path.join(directory, f"{day}.jsonl")
+    if not os.path.isfile(path):
+        return []
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return [line.rstrip("\n") for line in f if line.strip()]
+    except Exception:
+        return []
+
+
 def _write_file(rec: dict, directory: str) -> bool:
     try:
         os.makedirs(directory, exist_ok=True)
