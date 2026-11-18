@@ -39,6 +39,79 @@ MAX_RESOLVED = 300
 MAX_CTX_REASON = 200
 MAX_LINE_BYTES = 8000
 
+# 回答正文的留存长度上限（按字符）。1500 字足够覆盖绝大多数车驾管答案
+# （实测多在 300~800 字），再长的尾部通常是法条罗列，对判断"答得对不对"没有增量。
+MAX_ANSWER_CHARS = 1500
+# stdout 里的预览长度。云端日志单行过长会被截断，截断后整行 JSON 解析不出来，
+# 等于把这条记录彻底弄丢——所以控制台那一路只带开头。
+MAX_ANSWER_STDOUT = 200
+
+
+def _answer_mode() -> str:
+    """回答正文留存策略：full=存到上限、head=只存开头、off=完全不存。
+
+    默认 full：只记问句不记答案，能看出"问得多"，看不出"答得差"。
+    答错对象、答非所问、同一句重复三遍这类问题，恰恰只在正文里。
+    """
+    v = (os.getenv("QUERY_LOG_ANSWER", "full") or "full").strip().lower()
+    return v if v in ("full", "head", "off") else "full"
+
+
+def _answer_limit() -> int:
+    try:
+        return max(0, int(os.getenv("QUERY_LOG_ANSWER_MAX", MAX_ANSWER_CHARS)))
+    except Exception:
+        return MAX_ANSWER_CHARS
+
+
+def _flatten_blocks(blocks) -> str:
+    """把 blocks 还原成纯文本。
+
+    format=blocks 时返回体里没有 answer 字段，只有结构化块。不还原就等于
+    小程序侧的问答全部没有答案正文——而那恰恰是最需要看的一半。
+    """
+    out = []
+    for b in blocks or []:
+        if not isinstance(b, dict):
+            continue
+        t = b.get("type")
+        if t in ("h", "p", "quote"):
+            s = str(b.get("text") or "").strip()
+            if s:
+                out.append(s)
+        elif t == "list":
+            for it in b.get("items") or []:
+                s = str(it or "").strip()
+                if s:
+                    out.append("- " + s)
+        elif t == "table":
+            head = [str(x or "") for x in (b.get("header") or [])]
+            if head:
+                out.append(" | ".join(head))
+            for row in b.get("rows") or []:
+                out.append(" | ".join(str(x or "") for x in row))
+    return "\n".join(out)
+
+
+def _answer_fields(payload: dict) -> dict:
+    """回答正文 + 真实字数。
+
+    字数按完整文本算，不按截断后的算：那个数字是"答案有多长"的度量，
+    被留存上限影响的话，超过 1500 字的答案会齐刷刷显示成 1500。
+    """
+    text = str(payload.get("answer") or "").strip()
+    if not text:
+        text = _flatten_blocks(payload.get("blocks"))
+    full_len = len(text)
+    mode = _answer_mode()
+    if mode == "off" or not text:
+        return {"answer": "", "answer_chars": full_len}
+    limit = _answer_limit()
+    if mode == "head":
+        limit = min(limit, MAX_ANSWER_STDOUT) if limit else MAX_ANSWER_STDOUT
+    stored = text if not limit else (text[:limit] + "…" if len(text) > limit else text)
+    return {"answer": stored, "answer_chars": full_len}
+
 
 def _enabled() -> bool:
     return os.getenv("QUERY_LOG", "1").strip().lower() not in (
@@ -98,7 +171,7 @@ def classify(payload: dict, status_code: int = 200) -> str:
 def build_record(question: str, payload: dict, status_code: int = 200,
                  elapsed_ms: int = 0, history_turns: int = 0) -> dict:
     payload = payload or {}
-    return {
+    rec = {
         "ts": datetime.now(_TZ).strftime("%Y-%m-%d %H:%M:%S"),
         "q": _cut(question, MAX_QUESTION),
         "resolved_q": _cut(payload.get("resolved_question"), MAX_RESOLVED),
@@ -109,10 +182,20 @@ def build_record(question: str, payload: dict, status_code: int = 200,
         "ms": max(0, int(elapsed_ms)),
         "history_turns": max(0, int(history_turns)),
         "source_count": len(payload.get("sources") or []),
-        "answer_chars": len(payload.get("answer") or ""),
         "success": bool(payload.get("success")),
         "status": int(status_code),
     }
+    rec.update(_answer_fields(payload))
+    return rec
+
+
+def _stdout_view(rec: dict) -> dict:
+    """控制台那一路只带回答预览，避免单行超长被云日志截断。"""
+    if not rec.get("answer"):
+        return rec
+    view = dict(rec)
+    view["answer"] = _cut(rec["answer"], MAX_ANSWER_STDOUT)
+    return view
 
 
 def list_days() -> list:
@@ -172,7 +255,7 @@ def log_query(question: str, payload: dict, status_code: int = 200,
         return rec
 
     if emit:
-        line = "[QL] " + json.dumps(rec, ensure_ascii=False)
+        line = "[QL] " + json.dumps(_stdout_view(rec), ensure_ascii=False)
         try:
             print(_fit_bytes(line), flush=True)
         except Exception:

@@ -759,6 +759,11 @@ _ENV_SPEC = {
     "QUERY_LOG_DIR":  {"secret": False, "required": False, "default": "",
                        "desc": "问句日志落盘目录，建议 data/query_log。不配则只打 stdout，"
                                "导出接口 404，日志随云托管日志 7 天后消失"},
+    "QUERY_LOG_ANSWER": {"secret": False, "required": False, "default": "full",
+                       "desc": "回答正文留存：full=存到上限（默认）、head=只存前 200 字、"
+                               "off=只记元数据不记正文"},
+    "QUERY_LOG_ANSWER_MAX": {"secret": False, "required": False, "default": "1500",
+                       "desc": "回答正文字数上限，超过按此截断（字数统计仍按全文）"},
 }
 
 

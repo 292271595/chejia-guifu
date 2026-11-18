@@ -41,6 +41,8 @@ HEADERS = [
     ("改写后问句", 32, "resolved_q"),
     ("命中层级", 18, "layer"),
     ("事实 key", 34, "fact"),
+    ("回答开头", 50, "__answer_head"),
+    ("回答全文", 120, "__answer_full"),
     ("业务领域", 16, None),
     ("是否降级", 14, "degraded"),
     ("上下文原因", 18, "ctx_reason"),
@@ -100,6 +102,16 @@ def _sheet_log(wb, rows):
         for i, (_, _, key) in enumerate(HEADERS, 1):
             if key is None:
                 val = R._domain(rec.get("fact") or "")
+            elif key == "__answer_head":
+                # 表格里只放开头的 80 字：判断"答得对不对"够用，又能一眼扫过去。
+                # 全文在 JSONL 的 answer 字段里，需要细看时去那里取。
+                val = " ".join(str(rec.get("answer") or "").split())
+                if len(val) > 80:
+                    val = val[:80] + "…"
+            elif key == "__answer_full":
+                # 全文单独一列，不换行、不调行高：想细看就点单元格看编辑栏，
+                # 上千行也不会因为自动换行把表格撑成一片高墙。
+                val = " ".join(str(rec.get("answer") or "").split())
             else:
                 val = rec.get(key, "")
                 if key in ("ms", "history_turns", "source_count", "answer_chars", "status"):
@@ -111,7 +123,7 @@ def _sheet_log(wb, rows):
                     val = ""
             c = ws.cell(row=r, column=i, value=val)
             c.border = BORDER
-            c.alignment = Alignment(vertical="top", wrap_text=(i in (2, 3, 8)))
+            c.alignment = Alignment(vertical="top", wrap_text=(i in (2, 3, 6, 10)))
         layer = str(rec.get("layer") or "")
         color = LAYER_FILL.get(layer)
         if color:
@@ -203,6 +215,9 @@ def _sheet_help(wb, directory, path):
         ("为什么不是空的", "表里没有数据，就说明还没有成功拉取过，或线上还没发布含导出接口的版本。"),
         ("命中层级含义", "fact=确定性查表；rag=检索生成；rag_fallback=事实层复核后回退；rewrite=多轮改写；refused=超纲拒答；error=报错。"),
         ("业务领域", "按事实 key 前缀归类，用来快速看哪类问题最集中。"),
+        ("回答开头是什么", "系统实际回答的前 80 字，用来判断答得对不对（答错对象、答非所问、车轱辘话只在这里看得出来）。右边「回答全文」是同一段话的完整版，不换行、不撑行高，点单元格在编辑栏里看；底稿 JSONL 里存的是完整原文，最多 1500 字。小程序那种只回结构化块的模式会自动还原成文字。"),
+        ("为什么不记账号", "刻意不记 openid、IP 和源文件路径。能定位问题就够了，多记一样就多一份泄露风险。"),
+        ("怎么关掉回答留存", "云端加 QUERY_LOG_ANSWER=off 即只记元数据不记正文；=head 只记前 200 字；QUERY_LOG_ANSWER_MAX 可改 1500 这个上限。"),
         ("怎么排优先级", "先看高频问法，再看降级与错误占比。没被点踩不等于答对了，点踩只是旁证。"),
         ("数据在哪", os.path.abspath(directory)),
         ("本文件", os.path.abspath(path)),
