@@ -687,7 +687,37 @@ def health():
         # 反馈通道的可用性。writable=false 时反馈仍会进日志，但导不出来——
         # 这种情况必须能一眼看到，否则会以为"没人上报"，其实是存不下。
         "feedback": feedback.status(),
+        # 问句埋点的可用性。dir 为空=没配落盘目录，此时导出接口必然 404，
+        # 日志只能等云托管 stdout（7 天后消失）。days/last_day 让"到底攒了多少"
+        # 不用调导出接口也能看见——配了口令却导出为空时，一眼能分清是没配还是没数据。
+        "query_log": _query_log_status(),
     }
+
+
+def _query_log_status() -> dict:
+    """埋点落盘体检。只做轻量判断（isdir + os.access + 列目录），
+    不读文件内容——这个函数会被健康探针高频调用，不能顺手读几十 KB。"""
+    directory = query_log._log_dir()
+    info = {
+        "enabled": query_log._enabled(),
+        "dir": directory,
+        "exists": False,
+        "writable": False,
+        "days": 0,
+        "last_day": "",
+    }
+    if not directory:
+        return info
+    try:
+        info["exists"] = os.path.isdir(directory)
+        if info["exists"]:
+            info["writable"] = os.access(directory, os.W_OK)
+        days = query_log.list_days()
+        info["days"] = len(days)
+        info["last_day"] = days[-1] if days else ""
+    except Exception:
+        pass
+    return info
 
 
 # 环境变量清单：只有 required=True 的才必须由人来填，其余代码里都有默认值。
@@ -724,6 +754,11 @@ _ENV_SPEC = {
                        "desc": "反馈推送地址（企业微信/钉钉/飞书群机器人），按域名自动选请求格式"},
     "FEISHU_SECRET":  {"secret": True, "required": False, "default": "",
                        "desc": "飞书机器人签名密钥。机器人开了「签名校验」才需要，不开可不填"},
+    "QUERY_LOG":      {"secret": False, "required": False, "default": "1",
+                       "desc": "问句埋点总开关（1/0）。关掉后一条问句都不记"},
+    "QUERY_LOG_DIR":  {"secret": False, "required": False, "default": "",
+                       "desc": "问句日志落盘目录，建议 data/query_log。不配则只打 stdout，"
+                               "导出接口 404，日志随云托管日志 7 天后消失"},
 }
 
 
