@@ -71,7 +71,7 @@ def read_config() -> dict:
         cfg["_source"] = path
         break
     # 环境变量优先于文件
-    for k in ("QUERY_LOG_BASE_URL", "QUERY_LOG_TOKEN"):
+    for k in ("QUERY_LOG_BASE_URL", "QUERY_LOG_TOKEN", "QUERY_LOG_XLSX"):
         v = os.getenv(k, "").strip()
         if v:
             cfg[k] = v
@@ -111,6 +111,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=7, help="回溯天数，默认 7（覆盖云端保留窗口）")
     ap.add_argument("--check", action="store_true", help="只检查配置与连通性")
+    ap.add_argument("--no-excel", action="store_true", help="只写 JSONL，不刷新 Excel")
     args = ap.parse_args()
 
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -159,6 +160,17 @@ def main():
 
     total = local_total()
     msg = f"拉取 {len(days)} 天｜新增 {added} 条｜失败 {failed} 天｜本地累计 {total} 条"
+
+    # 表格跟着刷新：JSONL 是底稿，Excel 是给人看的那一份，两者不能各说各话
+    if not args.no_excel:
+        xlsx = cfg.get("QUERY_LOG_XLSX", "").strip() or os.path.join(OUT_DIR, "问句日志.xlsx")
+        try:
+            import query_log_excel
+            res = query_log_excel.sync(OUT_DIR, xlsx)
+            msg += f"｜表格已刷新 {res['rows']} 行"
+        except Exception as e:
+            msg += f"｜表格刷新失败（{type(e).__name__}）"
+
     write_run_log(msg)
     print(msg)
     return 0 if failed == 0 else 5
