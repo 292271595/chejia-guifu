@@ -13,11 +13,21 @@
       "added_at": "2026-11-17",
       "why": "省略主语的“满分了怎么办”原先没有处理器认领；但卷面满分是另一件事，必须让位。",
       "positive": [
-        {"q": "满分了怎么办", "expect": "FULL_SCORE"},
-        {"q": "满分咋办", "expect": "FULL_SCORE"}
+        {
+          "q": "满分了怎么办",
+          "expect": "FULL_SCORE"
+        },
+        {
+          "q": "满分咋办",
+          "expect": "FULL_SCORE"
+        }
       ],
       "negative": [
-        {"q": "科目一满分是多少", "expect_not": "FULL_SCORE", "why": "问卷面满分，不是记满12分"}
+        {
+          "q": "科目一满分是多少",
+          "expect_not": "FULL_SCORE",
+          "why": "问卷面满分，不是记满12分"
+        }
       ]
     },
     {
@@ -26,12 +36,26 @@
       "added_at": "2026-11-17",
       "why": "口语“几年一审”既可能问车辆检验，也可能问驾驶证审验；只能让带车辆语境的进车辆层。",
       "positive": [
-        {"q": "金杯9座几年一审", "expect": "VEHICLE:CYCLE"},
-        {"q": "摩托车几年一审", "expect": "VEHICLE:CYCLE"}
+        {
+          "q": "金杯9座几年一审",
+          "expect": "VEHICLE:CYCLE"
+        },
+        {
+          "q": "摩托车几年一审",
+          "expect": "VEHICLE:CYCLE"
+        }
       ],
       "negative": [
-        {"q": "A1驾驶证几年一审", "expect": "REVIEW:AB", "why": "问驾驶证审验，不能被车辆检验接走"},
-        {"q": "B2还要年审吗", "expect": "REVIEW:AB", "why": "“年审”整体归审验处理器，不进车辆层"}
+        {
+          "q": "A1驾驶证几年一审",
+          "expect": "REVIEW:AB",
+          "why": "问驾驶证审验，不能被车辆检验接走"
+        },
+        {
+          "q": "B2还要年审吗",
+          "expect": "REVIEW:AB",
+          "why": "“年审”整体归审验处理器，不进车辆层"
+        }
       ]
     },
     {
@@ -40,13 +64,29 @@
       "added_at": "2026-11-17",
       "why": "摩托车年限确认问法原先被注销登记流程抢答；扩的是年限确认，不是所有报废问法。",
       "positive": [
-        {"q": "摩托车最多骑几年", "expect": "EDGE:MOTO_SCRAP_YEARS"},
-        {"q": "摩托车还能骑几年", "expect": "EDGE:MOTO_SCRAP_YEARS"},
-        {"q": "摩托车能骑多少年", "expect": "EDGE:MOTO_SCRAP_YEARS"},
-        {"q": "摩托车能骑到哪年", "expect": "EDGE:MOTO_SCRAP_YEARS"}
+        {
+          "q": "摩托车最多骑几年",
+          "expect": "EDGE:MOTO_SCRAP_YEARS"
+        },
+        {
+          "q": "摩托车还能骑几年",
+          "expect": "EDGE:MOTO_SCRAP_YEARS"
+        },
+        {
+          "q": "摩托车能骑多少年",
+          "expect": "EDGE:MOTO_SCRAP_YEARS"
+        },
+        {
+          "q": "摩托车能骑到哪年",
+          "expect": "EDGE:MOTO_SCRAP_YEARS"
+        }
       ],
       "negative": [
-        {"q": "摩托车报废怎么办理", "expect": "REG:SCRAP", "why": "问流程仍归注销登记，不能抢成年限题"}
+        {
+          "q": "摩托车报废怎么办理",
+          "expect": "REG:SCRAP",
+          "why": "问流程仍归注销登记，不能抢成年限题"
+        }
       ]
     },
     {
@@ -55,11 +95,67 @@
       "added_at": "2026-11-17",
       "why": "用户不说“实习期”三个字，也可能在问实习期限制；但刚拿证问准驾范围必须留给车型处理器。",
       "positive": [
-        {"q": "刚拿到驾驶证可以独自上高速吗", "expect": "INTERNSHIP:HIGHWAY"},
-        {"q": "驾驶证才拿到，高速一个人上行不行", "expect": "INTERNSHIP:HIGHWAY"}
+        {
+          "q": "刚拿到驾驶证可以独自上高速吗",
+          "expect": "INTERNSHIP:HIGHWAY"
+        },
+        {
+          "q": "驾驶证才拿到，高速一个人上行不行",
+          "expect": "INTERNSHIP:HIGHWAY"
+        }
       ],
       "negative": [
-        {"q": "刚取得C1能开什么车", "expect": "SCOPE:C1", "why": "问准驾范围，不是实习期限制"}
+        {
+          "q": "刚取得C1能开什么车",
+          "expect": "SCOPE:C1",
+          "why": "问准驾范围，不是实习期限制"
+        }
+      ]
+    },
+    {
+      "term": "报废车上路",
+      "handler": "table_edge_scrap_drive_onroad",
+      "added_at": "2026-11-18",
+      "why": "线上两条真实错答：报废车上路被答成醉驾5年、第十四条、造成事故才吊销。根因是事实层无处理器覆盖第一百条的报废/拼装车上路处罚，掉进生成层被编造。本入口词接住「报废/拼装车上路+处罚/吊销/重考」整类，同时守卫醉驾、注销流程、3周期强制报废、摩托年限。",
+      "positive": [
+        {
+          "q": "驾驶报废车辆上路会受到怎么样的处罚",
+          "expect": "EDGE:SCRAP_DRIVE_ONROAD"
+        },
+        {
+          "q": "报废车上路被查到怎么处罚",
+          "expect": "EDGE:SCRAP_DRIVE_ONROAD"
+        },
+        {
+          "q": "开报废车上路吊销驾照后多久能重考",
+          "expect": "EDGE:SCRAP_DRIVE_ONROAD"
+        },
+        {
+          "q": "拼装车上路怎么处罚",
+          "expect": "EDGE:SCRAP_DRIVE_ONROAD"
+        }
+      ],
+      "negative": [
+        {
+          "q": "醉驾吊销驾驶证后多久能重新考",
+          "expect": "REVOKE:5",
+          "why": "酒驾醉驾档是第九十一条5年，不能被报废车上路规则抢走"
+        },
+        {
+          "q": "车辆报废了怎么办理注销登记",
+          "expect": "REG:SCRAP",
+          "why": "问报废流程仍归注销登记，不是上路处罚"
+        },
+        {
+          "q": "连续三个检验周期没年检会强制报废吗",
+          "expect": "EDGE:THREE_CYCLE_SCRAP",
+          "why": "问未检强制报废归检验周期规则"
+        },
+        {
+          "q": "摩托车最多能骑多少年",
+          "expect": "EDGE:MOTO_SCRAP_YEARS",
+          "why": "问摩托车使用年限，不是上路处罚"
+        }
       ]
     }
   ]
