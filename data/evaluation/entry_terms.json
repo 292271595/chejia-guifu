@@ -404,6 +404,81 @@
           "why": "问成绩保留期，不是约考间隔"
         }
       ]
+    },
+    {
+      "term": "科一没过能补考吗",
+      "handler": "q_exam",
+      "added_at": "2026-11-19",
+      "why": "线上错答：问「科一没过能补考吗」，检索层答成「在规定时间内重新预约补考」，漏了「当场补考一次」，还把条号写成第四十条。事实层早有 EXAM:TIMES_K1（第四十七条、当场补考一次），但有两道门挡着：q_exam 的 norm_subject 不认「科一/科二/科三」简称，调度层主题词表也不认。两处都修后整类简称问法（补考、内容、合格分、约考、时长）都能进事实层。",
+      "positive": [
+        {
+          "q": "科一没过能补考吗",
+          "expect": "EXAM:TIMES_K1"
+        },
+        {
+          "q": "科一挂了能补考吗",
+          "expect": "EXAM:TIMES_K1"
+        },
+        {
+          "q": "科1没过能补考吗",
+          "expect": "EXAM:TIMES_K1"
+        },
+        {
+          "q": "科一没过怎么办",
+          "expect": "EXAM:TIMES_K1"
+        },
+        {
+          "q": "科二没过能补考吗",
+          "expect": "EXAM:TIMES"
+        },
+        {
+          "q": "科三没过能补考吗",
+          "expect": "EXAM:TIMES"
+        },
+        {
+          "q": "科一考什么",
+          "expect": "EXAM:S1_CONTENT"
+        },
+        {
+          "q": "科二多少分",
+          "expect": "EXAM:PASS_S2"
+        },
+        {
+          "q": "科二怎么约考",
+          "expect": "EXAM:YUEKAO_GAP_S2"
+        },
+        {
+          "q": "科三怎么约考",
+          "expect": "EXAM:YUEKAO_GAP_S3"
+        }
+      ],
+      "negative": [
+        {
+          "q": "科四没过能补考吗",
+          "expect": "EXAM:TIMES_SAFE",
+          "why": "安全文明单独一支，没有10日间隔和5次上限"
+        },
+        {
+          "q": "科一成绩多久出来",
+          "expect": "EXAM:SCORE_RELEASE",
+          "why": "问出分时间，法规无统一口径，不能被补考间隔抢走"
+        },
+        {
+          "q": "科一考试有效期多久",
+          "expect": "EXAM:SCORE_VALID",
+          "why": "问成绩保留期3年，不是补考规则"
+        },
+        {
+          "q": "科一考试要多久",
+          "expect": "EXAM:ITEM_TIME",
+          "why": "问考试时长45分钟，不是补考规则"
+        },
+        {
+          "q": "科目二五次不过怎么办",
+          "expect": "EXAM:TIMES",
+          "why": "金标准冻结回归题，不能被简称入口改写"
+        }
+      ]
     }
   ]
 }
