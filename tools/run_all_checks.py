@@ -59,6 +59,7 @@ CHECKS = [
     ("反馈推送", "test_feedback_push.py", False, "飞书格式、截断、字节上限", []),
     ("问句埋点", "test_query_log.py", False, "全量问句字段、分层统计与敏感字段", []),
     ("入口词准入", "check_entry_terms.py", False, "新增入口词的正向同类与反向守卫", []),
+    ("覆盖体检", "test_fact_coverage.py", False, "法规条款切分与「已覆盖」判定方向", []),
     ("对象维扫描", "scan_subject_leak.py", False, "同一处理器套多对象是否串答案", []),
     ("时限对账", "scan_item_time.py", False, "考试项目时限与 OCR 原文逐项核对", []),
     ("100题实测", "eval_web100.py", True, "真实链路端到端（需要模型，约 2 分钟）", ["--fresh"]),
