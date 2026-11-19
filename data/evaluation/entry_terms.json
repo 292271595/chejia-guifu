@@ -623,6 +623,52 @@
           "why": "问体检材料，答补考间隔就是答非所问"
         }
       ]
+    },
+    {
+      "term": "科二能取消预约吗",
+      "handler": "table_exam_cancel",
+      "added_at": "2026-11-19",
+      "why": "用户真实问答清单第9/15/16/17条：取消考试预约。事实层无处理器，掉检索层。172号令第四十六条有明确原文（提前1日取消、不去判不合格），做成 EXAM:CANCEL 表行，4条问法合并为种子。",
+      "positive": [
+        {
+          "q": "科二能取消预约吗",
+          "expect": "EXAM:CANCEL"
+        },
+        {
+          "q": "约了考试没空去",
+          "expect": "EXAM:CANCEL"
+        },
+        {
+          "q": "取消要提前多久",
+          "expect": "EXAM:CANCEL"
+        },
+        {
+          "q": "约了不去算什么",
+          "expect": "EXAM:CANCEL"
+        }
+      ],
+      "negative": [
+        {
+          "q": "科目二怎么约考",
+          "expect": "EXAM:YUEKAO_GAP_S2",
+          "why": "问初次约考，不是取消"
+        },
+        {
+          "q": "科二挂科了多久能再约",
+          "expect": "EXAM:TIMES",
+          "why": "问补考间隔，不是取消"
+        },
+        {
+          "q": "取消预约在12123上怎么操作",
+          "expect_not": "EXAM:CANCEL",
+          "why": "问操作步骤，事实层只答规则，操作类不该被抢"
+        },
+        {
+          "q": "驾驶证换证能取消吗",
+          "expect_not": "EXAM:CANCEL",
+          "why": "问换证，不是考试预约"
+        }
+      ]
     }
   ]
 }
