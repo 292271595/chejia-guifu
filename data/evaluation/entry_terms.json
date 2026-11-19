@@ -1767,6 +1767,170 @@
           "why": "这是车籍注销，不是临牌作废"
         }
       ]
+    },
+    {
+      "term": "电动车几岁能骑",
+      "handler": "q_ebike_age",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 177 题「未满18能骑吗」。回原文核验发现台账答案「不能」本身是错的：实施条例第七十二条第二项明确电动自行车年满 16 周岁即可，只有电动摩托车（机动车）才卡 18 周岁。系统原来被 VEHICLE:CATEGORY 连坐答了一整页车辆分类，一个字没回答年龄。影响面扫描：①「多大能考摩托车驾照」不含「电动」、且本行 exclude 有「考驾照」，仍归 AGE:APPLY_ALL；②「电动摩托车要驾照吗」无年龄词，仍归 VEHICLE:CATEGORY；③「12岁能骑自行车吗」不含「电动」不命中，仍走检索层（自行车 12 岁这条尚未建表，已知缺口）。",
+      "positive": [
+        {
+          "q": "未满18岁能骑电动车吗",
+          "expect": "EBIKE:AGE"
+        },
+        {
+          "q": "几岁能骑电动自行车",
+          "expect": "EBIKE:AGE"
+        },
+        {
+          "q": "16岁能骑电动车吗",
+          "expect": "EBIKE:AGE"
+        },
+        {
+          "q": "未成年可以骑电瓶车吗",
+          "expect": "EBIKE:AGE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "多大能考摩托车驾照",
+          "expect_not": "EBIKE:AGE",
+          "why": "问申领驾驶证年龄，归 AGE:APPLY_ALL"
+        },
+        {
+          "q": "电动自行车要驾照吗",
+          "expect_not": "EBIKE:AGE",
+          "why": "问要不要证，不是问年龄"
+        }
+      ]
+    },
+    {
+      "term": "超标电动车过渡期",
+      "handler": "q_ebike_transition",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 173 题「超标车过渡期后」与第 174 题「黄牌能换绿牌吗」。回原文核验：全国层面没有统一过渡期期限、也没有统一号牌颜色规则，属地方政策，按 6.3 不能编数字；但检索层会自己编（给个「三年」或「去车管所换牌」），所以做成「明说没有全国统一规定 + 定性判断骨架 + 指路当地公告」的直答。影响面扫描：①「电动车要驾照吗」无超标/换牌词，仍归 VEHICLE:CATEGORY；②「大货车黄牌能换成蓝牌吗」不含「电动」被 require 挡（实测 None，属另一业务）；③「新国标电动车多少钱」只问价格，不命中。",
+      "positive": [
+        {
+          "q": "超标电动车过渡期后还能上路吗",
+          "expect": "EBIKE:TRANSITION"
+        },
+        {
+          "q": "黄牌电动车能换绿牌吗",
+          "expect": "EBIKE:TRANSITION"
+        },
+        {
+          "q": "非标电动车还能骑多久",
+          "expect": "EBIKE:TRANSITION"
+        }
+      ],
+      "negative": [
+        {
+          "q": "电动自行车要驾照吗",
+          "expect_not": "EBIKE:TRANSITION",
+          "why": "问准驾，归 VEHICLE:CATEGORY"
+        },
+        {
+          "q": "大货车黄牌能换成蓝牌吗",
+          "expect_not": "EBIKE:TRANSITION",
+          "why": "货车号牌换色，不是电动自行车过渡期"
+        }
+      ]
+    },
+    {
+      "term": "摩托车上牌",
+      "handler": "q_moto_register",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 178 题，实测 winner=None 全掉检索层，真知识缺口。原文齐全：登记规定第十条（住所地）、第十一条（安检证明）、第十二条（六项材料 + 2 日内）、第十四条第二款（摩托车带牌销售，摩托车专属条款）、便民 3.7（跨省一证通办）。影响面扫描：①「摩托车怎么过户」被 exclude 的「过户」挡，仍归 VEHICLE:TRANSFER；②「摩托车驾照怎么考」被 exclude 的「驾照」挡，归驾驶证域；③「摩托车上高速」被 exclude 的「高速」挡，归 MOTO:HIGHWAY；④「汽车上牌要什么材料」不含摩托，仍归 REG:NEW_CAR（实测确认）。",
+      "positive": [
+        {
+          "q": "摩托车怎么上牌",
+          "expect": "MOTO:REGISTER"
+        },
+        {
+          "q": "摩托车上牌要什么材料",
+          "expect": "MOTO:REGISTER"
+        },
+        {
+          "q": "摩托车异地能上牌吗",
+          "expect": "MOTO:REGISTER"
+        }
+      ],
+      "negative": [
+        {
+          "q": "摩托车过户怎么办",
+          "expect_not": "MOTO:REGISTER",
+          "why": "转让登记，归 VEHICLE:TRANSFER"
+        },
+        {
+          "q": "汽车上牌要什么材料",
+          "expect_not": "MOTO:REGISTER",
+          "why": "汽车注册登记，归 REG:NEW_CAR"
+        }
+      ]
+    },
+    {
+      "term": "摩托车上高速",
+      "handler": "q_moto_highway",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 179 题「摩托能上高速吗」与第 180 题「上高速能带人吗」，两条实测都 winner=None。原文：道交法第六十七条（设计最高时速低于七十公里不得进入）、实施条例第七十八条（摩托车不超过 80 km/h）、第八十三条（两轮摩托高速不得载人）、第五十一条（头盔）。台账「黄牌可以、蓝牌不行」结论对但原文没有「黄牌/蓝牌」写法，改按原文口径 + 准驾车型定义补推理链。**地方禁摩必须写明**，只讲全国法会误导。影响面扫描：①「摩托车上高速能带人吗」归 MOTO:HIGHWAY_PASSENGER（本行 exclude 已挡）；②「电动自行车能上高速吗」不含摩托/机车，不命中；③「汽车上高速注意什么」不含摩托，不命中。",
+      "positive": [
+        {
+          "q": "摩托车上高速要什么条件",
+          "expect": "MOTO:HIGHWAY"
+        },
+        {
+          "q": "摩托车能上高速吗",
+          "expect": "MOTO:HIGHWAY"
+        },
+        {
+          "q": "摩托车上高速限速多少",
+          "expect": "MOTO:HIGHWAY"
+        }
+      ],
+      "negative": [
+        {
+          "q": "电动自行车能上高速吗",
+          "expect_not": "MOTO:HIGHWAY",
+          "why": "问的是电动自行车（非机动车），不是摩托车；另注：载人那条没法用 expect_not 表达，因为 MOTO:HIGHWAY_PASSENGER 天然 startswith MOTO:HIGHWAY，前缀匹配会自伤，改由该行自己的正向项守"
+        },
+        {
+          "q": "汽车上高速要注意什么",
+          "expect_not": "MOTO:HIGHWAY",
+          "why": "不含摩托，不是本条范围"
+        }
+      ]
+    },
+    {
+      "term": "临牌怎么放",
+      "handler": "q_temp_plate_place",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 181 题「摩托临牌怎么装」，实测 winner=None 掉检索层，检索层编出「摩托车临时行驶车号牌应当放置在摩托车前窗范围内」——摩托车没有前窗，纯属虚构，还引了第四十八条（那是智能网联汽车道路测试）。《机动车登记规定》通篇没有规定临牌粘贴位置，按 6.3 不能编位置，所以做成「明说部令没规定 + 讲第十一条悬挂义务与第九十五条后果 + 汽车/摩托车分开讲通行做法」的直答。同时给 REG:TEMP_PLATE 的 exclude 补放置类词防抢答。影响面扫描：①「临牌能办几次」「临牌有效期多久」「临牌过期了还能开吗」仍归 REG:TEMP_PLATE（实测确认）；②「年检标志要贴吗」不含临牌，仍归 REG:E_MARK；③「实习标志怎么贴」不含临牌，不命中。",
+      "positive": [
+        {
+          "q": "摩托车临牌怎么放",
+          "expect": "REG:TEMP_PLATE_PLACE"
+        },
+        {
+          "q": "临牌贴哪里",
+          "expect": "REG:TEMP_PLATE_PLACE"
+        },
+        {
+          "q": "临时号牌怎么粘贴",
+          "expect": "REG:TEMP_PLATE_PLACE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "临牌能办几次",
+          "expect_not": "REG:TEMP_PLATE_PLACE",
+          "why": "问次数，归 REG:TEMP_PLATE"
+        },
+        {
+          "q": "临牌有效期多久",
+          "expect_not": "REG:TEMP_PLATE_PLACE",
+          "why": "问期限，归 REG:TEMP_PLATE"
+        }
+      ]
     }
 
 
