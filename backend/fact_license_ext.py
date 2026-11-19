@@ -20,7 +20,7 @@ from fact_common import (extract_codes, covers, source, result, has, norm, cn2in
                          ABROAD_SELF as _ABROAD_SELF, ABROAD_EXPIRE as _ABROAD_EXPIRE,
                          EXAM_TRANSFER_TOPIC, EXAM_TRANSFER_SCOPE, EXAM_TRANSFER_EXCLUDE,
                          APPLY_MEDICAL_TOPIC, APPLY_MEDICAL_MED, APPLY_MEDICAL_EXCLUDE,
-                         RENEW_TOPIC, RENEW_HOW, RENEW_CTX, RENEW_CTX_EXCLUDE,
+                         RENEW_TOPIC, RENEW_HOW, RENEW_CTX, RENEW_CTX_EXCLUDE, RENEW_OBJ_EXCLUDE,
                          EXAM_LOCAL_APPLY_TOPIC, is_exam_local_apply, ADD_SCORE_TOPIC)
 
 LAW = "《机动车驾驶证申领和使用规定》（公安部令第172号）"
@@ -405,6 +405,9 @@ def _renew_overdue(years: float) -> Dict:
 # 三、换证 / 有效期 / 核发地变更
 # ============================================================
 def q_renew(q: str) -> Optional[Dict]:
+    # 对象守卫先走：临牌/号牌过期不是驾驶证到期换证（见 RENEW_OBJ_EXCLUDE 注释）。
+    if re.search(RENEW_OBJ_EXCLUDE, q):
+        return None
     # 2026-11-19：RENEW_TOPIC 含裸「异地」，会把「异地可以考驾照吗」当成异地换证。
     # 初次报考归 APPLY:MATERIAL（便民 2.1 一证通考），这里先让位；已有换证/补证
     # 等词的问句由 is_exam_local_apply 的排除表挡住，不会被误让位。

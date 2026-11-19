@@ -1127,7 +1127,274 @@
           "why": "电子行驶证管车，不是驾驶证"
         }
       ]
+    },
+    {
+      "term": "新车怎么上牌",
+      "handler": "q_new_car_reg",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 91/92/96/105 题：新车怎么上牌、带什么材料、要不要开车去、分期车能否网上上牌，四条全掉检索层。164 号令第十条有材料六项逐字原文，便民 3.1（国产 2025-11-01、进口 2026-12-01）、3.19（预查验免交验）有生效时间与口径。影响面扫描：①「二手车过户怎么上牌」被 exclude 的过户挡，归 VEHICLE:TRANSFER；②「上牌要多少钱」无统一收费标准原文，不强答；③「补办号牌要多久」归 REG:REISSUE；④「上牌一件事怎么办」让位给 REG:ONE_THING（exclude 一件事/预查验）。",
+      "positive": [
+        {
+          "q": "新车怎么上牌",
+          "expect": "REG:NEW_CAR"
+        },
+        {
+          "q": "分期车能网上上牌吗",
+          "expect": "REG:NEW_CAR"
+        },
+        {
+          "q": "刚提的车怎么上户",
+          "expect": "REG:NEW_CAR"
+        }
+      ],
+      "negative": [
+        {
+          "q": "二手车过户怎么上牌",
+          "expect_not": "REG:NEW_CAR",
+          "why": "二手车过户是转移登记，材料与流程另一套"
+        },
+        {
+          "q": "上牌要多少钱",
+          "expect_not": "REG:NEW_CAR",
+          "why": "收费无全国原文，按 6.3 禁区不入库"
+        },
+        {
+          "q": "上牌一件事怎么办",
+          "expect_not": "REG:NEW_CAR",
+          "why": "一件事/预查验归 REG:ONE_THING，别被本行抢"
+        }
+      ]
+    },
+    {
+      "term": "一件事是啥",
+      "handler": "q_one_thing",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 95 题：「一件事」是什么全掉检索层。便民 3.1-3.2 有逐字原文，且明确国产 2025-11-01 现行、进口 2026-12-01 起施行。影响面扫描：①「二手车一件事怎么办」被 exclude 挡，归 VEHICLE:TRANSFER；②「年检一件事能办吗」归 VEHICLE:CYCLE；③「上牌要带什么材料」归 REG:NEW_CAR；④「预查验是啥」是另一个概念，已单列 REG:PRECHECK（端到端实测：一行同时答两个定义，复核层判答错对象）。",
+      "positive": [
+        {
+          "q": "一件事是啥",
+          "expect": "REG:ONE_THING"
+        },
+        {
+          "q": "一件事一网通办是什么",
+          "expect": "REG:ONE_THING"
+        },
+        {
+          "q": "上牌一件事怎么办",
+          "expect": "REG:ONE_THING"
+        }
+      ],
+      "negative": [
+        {
+          "q": "二手车一件事怎么办",
+          "expect_not": "REG:ONE_THING",
+          "why": "便民 3.1 只覆盖国产/进口小客车新车注册，二手车无此口径"
+        },
+        {
+          "q": "年检一件事能办吗",
+          "expect_not": "REG:ONE_THING",
+          "why": "年检归 VEHICLE:CYCLE，与上牌一件事不是同一措施"
+        },
+        {
+          "q": "预查验是啥",
+          "expect_not": "REG:ONE_THING",
+          "why": "预查验是独立概念，归 REG:PRECHECK；一行同时答两个定义会被复核层判答错对象"
+        }
+      ]
+    },
+    {
+      "term": "预查验是啥",
+      "handler": "q_precheck",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 97 题「预查验是啥」全掉检索层。便民 3.19 有逐字原文：出厂由生产企业查验、共享信息、注册登记免予交验机动车；并写明 2023-06-01 试点扩围、2025-11-01 全国推行、判断口径看生产企业不看城市。影响面扫描：①「年检免检标志」不归本行（exclude 检验标志）；②「二手车过户要不要验车」归 VEHICLE:TRANSFER；③「一件事是啥」归 REG:ONE_THING。",
+      "positive": [
+        {
+          "q": "预查验是啥",
+          "expect": "REG:PRECHECK"
+        },
+        {
+          "q": "什么是新车预查验",
+          "expect": "REG:PRECHECK"
+        },
+        {
+          "q": "新车预查验是什么意思",
+          "expect": "REG:PRECHECK"
+        }
+      ],
+      "negative": [
+        {
+          "q": "年检标志还要贴吗",
+          "expect_not": "REG:PRECHECK",
+          "why": "检验标志是年检业务，不是预查验"
+        },
+        {
+          "q": "一件事是啥",
+          "expect_not": "REG:PRECHECK",
+          "why": "一件事归 REG:ONE_THING，两个概念答案不同"
+        }
+      ]
+    },
+    {
+      "term": "网上选号几次机会",
+      "handler": "q_online_pick",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 99/100 题（自编 50 次、弃号两年内禁止网上选号）查无原文、按 6.3 不入库；但实测检索层会自己编数字——问「网上选号几次机会」答「三次机会」并引第四十三条，而该条通篇没有次数。编数字比不答危害大，故做成「明说没有全国统一规定 + 以当地为准」的直答（与「科目一成绩多久出来」同一处理）。依据：164 号令第四十三条只有选号方式。影响面扫描：①「号牌能互换吗」不含选号二字，归 REG:PLATE_SWAP；②「能用老号牌吗」被 exclude 挡，归 REG:KEEP_PLATE；③「临牌能办几次」归 REG:TEMP_PLATE（那是核发次数，有原文）。",
+      "positive": [
+        {
+          "q": "网上选号几次机会",
+          "expect": "REG:ONLINE_PICK"
+        },
+        {
+          "q": "选号后不去上牌会怎样",
+          "expect": "REG:ONLINE_PICK"
+        },
+        {
+          "q": "选号能自编吗",
+          "expect": "REG:ONLINE_PICK"
+        }
+      ],
+      "negative": [
+        {
+          "q": "号牌能互换吗",
+          "expect_not": "REG:ONLINE_PICK",
+          "why": "号牌互换归 REG:PLATE_SWAP（第二十条），条件与选号无关"
+        },
+        {
+          "q": "临牌能办几次",
+          "expect_not": "REG:ONLINE_PICK",
+          "why": "临牌核发次数有第四十八条原文，归 REG:TEMP_PLATE，别混成选号次数"
+        }
+      ]
+    },
+    {
+      "term": "上牌要多少钱",
+      "handler": "q_reg_fee",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 93 题问上牌收费金额，清单里的数字查无原文、按 6.3 不入库；完全不答会让检索层贴无关原文（实测答成「未完成注册登记不能上路」）。164 号令第三条要求车管所公示收费标准但不规定金额，正好支撑「没有全国统一价 + 看当地公示」这个诚实答案。影响面扫描：①「补办号牌多少钱」被 exclude 挡，归 REG:REISSUE；②「年检多少钱」归检验；③「新车上牌要带什么材料」归 REG:NEW_CAR（本行 exclude 已加多少钱/收费/费用，避免被新车行抢）。",
+      "positive": [
+        {
+          "q": "上牌要多少钱",
+          "expect": "REG:FEE"
+        },
+        {
+          "q": "新车上牌收费多少",
+          "expect": "REG:FEE"
+        },
+        {
+          "q": "上牌费用包括哪些",
+          "expect": "REG:FEE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "补办号牌多少钱",
+          "expect_not": "REG:FEE",
+          "why": "补领牌证是 REG:REISSUE 的业务"
+        },
+        {
+          "q": "新车怎么上牌",
+          "expect_not": "REG:FEE",
+          "why": "问流程材料归 REG:NEW_CAR，两行不能互抢"
+        }
+      ]
+    },
+    {
+      "term": "能用老号牌吗",
+      "handler": "q_keep_plate",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 101 题：口语说「老号牌」「留着」，q_keep_plate 入口只认「原号牌/保留」，整类漏答。164 号令第四十四条三个条件（两年内申请、用满一年以上、违法事故处理完）有逐字原文。影响面扫描：①「号牌能互换吗」归 REG:PLATE_SWAP；②「换车牌要什么手续」是变更号牌业务，此前被 `换车.{0,10}(牌|号)` 抢答成保留原号，已加让位守卫；③「车牌丢了怎么办」归 REG:REISSUE。",
+      "positive": [
+        {
+          "q": "能用老号牌吗",
+          "expect": "REG:KEEP_PLATE"
+        },
+        {
+          "q": "卖车后号牌能留着吗",
+          "expect": "REG:KEEP_PLATE"
+        },
+        {
+          "q": "可以用原来的号牌吗",
+          "expect": "REG:KEEP_PLATE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "换车牌要什么手续",
+          "expect_not": "REG:KEEP_PLATE",
+          "why": "换号牌是变更号牌，不是保留原号，答成两年内可申请原号牌属答非所问"
+        },
+        {
+          "q": "号牌能互换吗",
+          "expect_not": "REG:KEEP_PLATE",
+          "why": "互换归 REG:PLATE_SWAP（第二十条），条件与第四十四条不同"
+        }
+      ]
+    },
+    {
+      "term": "临牌能办几次",
+      "handler": "q_temp_plate",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 103/104 题：没上牌能不能办临牌、临牌能办几次，全掉检索层。164 号令第四十六/四十七/四十八条有五种情形、三档有效期、三次核发上限的逐字原文；过期上路后果用道交法第九十五条。影响面扫描：①「正式号牌丢了能上路吗」被 exclude 挡，归 EDGE:PLATE_MISSING_DRIVE；②「临牌过期了还能开吗」原先被 RENEW:EXPIRED 答成驾驶证过期三档，已加 RENEW_OBJ_EXCLUDE 对象守卫；③「没上牌能上路吗」归本行。",
+      "positive": [
+        {
+          "q": "临牌能办几次",
+          "expect": "REG:TEMP_PLATE"
+        },
+        {
+          "q": "没上牌能办临牌吗",
+          "expect": "REG:TEMP_PLATE"
+        },
+        {
+          "q": "临牌过期了还能开吗",
+          "expect": "REG:TEMP_PLATE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "正式号牌丢了能上路吗",
+          "expect_not": "REG:TEMP_PLATE",
+          "why": "正式号牌丢失上路归 EDGE:PLATE_MISSING_DRIVE"
+        },
+        {
+          "q": "驾驶证到期怎么换",
+          "expect_not": "REG:TEMP_PLATE",
+          "why": "换证归 RENEW，别被「到期/过期」串过来"
+        }
+      ]
+    },
+    {
+      "term": "电子行驶证单独申请",
+      "handler": "q_e_vehicle",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 107 题：电子行驶证怎么申领全掉检索层。便民 3.10 有「与纸质行驶证具有同等法律效力、全国范围内有效」逐字原文，并写明 2024-07-01 试点、2024-11 起分批全国推行。影响面扫描：①「电子驾驶证全国通用吗」被 exclude 挡，归 ANSWER:E_LICENSE；②「检验标志电子凭证还要贴吗」归 REG:E_MARK；③「行驶证丢了怎么补」归 REG:REISSUE。",
+      "positive": [
+        {
+          "q": "电子行驶证单独申请",
+          "expect": "ANSWER:E_VEHICLE"
+        },
+        {
+          "q": "电子行驶证怎么申领",
+          "expect": "ANSWER:E_VEHICLE"
+        },
+        {
+          "q": "电子行驶证有用吗",
+          "expect": "ANSWER:E_VEHICLE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "电子驾驶证全国通用吗",
+          "expect_not": "ANSWER:E_VEHICLE",
+          "why": "电子驾驶证管人，归 ANSWER:E_LICENSE"
+        },
+        {
+          "q": "检验标志电子凭证还要贴吗",
+          "expect_not": "ANSWER:E_VEHICLE",
+          "why": "检验标志归 REG:E_MARK，不是行驶证"
+        }
+      ]
     }
+
 
   ]
 }

@@ -48,6 +48,7 @@ PY = sys.executable
 CHECKS = [
     ("表体检", "check_knowledge_table.py", False, "结构、依据原文、法条对账", []),
     ("表查重", "check_table_overlap.py", False, "新增行是否重复覆盖已有答案", []),
+    ("表重复实现", "check_table_dup.py", False, "表行与手写处理器是否各写了一份同一 fact", []),
     ("金标准", "check_golden.py", False, "20 条冻结答案 + 依据原文 + 尺子自检", []),
     ("精准开发集", "eval_precision.py", False, "独立挑战题 + 首段/完整性 + 错误归因", ["--split", "dev"]),
     ("事实表", "test_fact_table.py", False, "key 断言 + 文案要素断言（含表生成）", []),

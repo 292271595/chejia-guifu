@@ -1234,8 +1234,7 @@ _HANDLERS = [
     # 「暂无准确信息」（联网 100 问 W088）。排在 q_vehicle 之前，避免被
     # 转籍/过户那几条按「车牌…迁/转」接走。
     (fact_vehicle.q_keep_plate,
-     r"(原车牌|原号牌|原机动车号牌|保留.{0,6}(车牌|号牌|号码|原号)|换车.{0,10}(牌|号)|"
-     r"车牌.{0,6}(保留|能用|继续用)|使用原|要回原号)",
+     fact_vehicle._KEEP_PLATE_TOPIC,
      {"QUALIFY", "DURATION", "PROCEDURE", "LIST", "VALUE"}),
     (fact_vehicle.q_vehicle,
      r"(年检|检验|检测|检车|车检|验车|审车|上线|免检|报废|二手车|过户|转让|转籍|迁出|迁入|迁到|迁往|平移|提档|调档|"
