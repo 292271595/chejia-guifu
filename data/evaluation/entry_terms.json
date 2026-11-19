@@ -851,6 +851,85 @@
         { "q": "文明驾驶学习要多久", "expect_not": "EXAM:S4_CONTENT", "why": "问学习时长，定义守卫挡掉" },
         { "q": "科四什么时候考", "expect_not": "EXAM:S4_CONTENT", "why": "问约考时间，归 YUEKAO_GAP" }
       ]
+    },
+    {
+      "term": "C1和C2考哪个",
+      "handler": "q_c1_c2_compare",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 3 题：C1/C2 选择类问法全掉检索层。客观依据在附件1准驾表和第三十三条（C2 少坡道定点），做成 ANSWER:C1_C2_COMPARE 表行；主观「哪个好考」改写为操作更简单/通过率通常更高，不替用户决定。同类影响面扫描：①「C1能开自动挡吗」是准驾包含，仍归 CONTAIN:C1->C2，不被抢；②「C1能开什么车」归 SCOPE:C1；③「C1增驾摩托吗」归 ADD:MOTO；④「增驾A1要什么条件」归 ADD:A1；⑤「C1扣分要学习吗」归审验学习类，不被对比行接走。",
+      "positive": [
+        {
+          "q": "C1和C2考哪个",
+          "expect": "ANSWER:C1_C2_COMPARE"
+        },
+        {
+          "q": "考C1还是C2",
+          "expect": "ANSWER:C1_C2_COMPARE"
+        },
+        {
+          "q": "C2能开手动挡吗",
+          "expect": "ANSWER:C1_C2_COMPARE"
+        },
+        {
+          "q": "手动挡自动挡驾照选哪个",
+          "expect": "ANSWER:C1_C2_COMPARE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "C1能开自动挡吗",
+          "expect": "CONTAIN:C1->C2",
+          "why": "准驾包含，归包含处理器"
+        },
+        {
+          "q": "C1能开什么车",
+          "expect": "SCOPE:C1",
+          "why": "准驾范围总表"
+        },
+        {
+          "q": "C1增驾摩托吗",
+          "expect": "ADD:MOTO",
+          "why": "增驾条件"
+        },
+        {
+          "q": "增驾A1要什么条件",
+          "expect": "ADD:A1",
+          "why": "增驾条件"
+        }
+      ]
+    },
+    {
+      "term": "报名要带什么",
+      "handler": "q_apply_material",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 2 题：问句不带「驾照」二字，APPLY:MATERIAL 主题不认，掉检索层；答案其实现成（第二十三条两项：身份证明+身体条件证明，照片现场采集，第二十八条联网免交）。给主题补「报名/报考+要带/带什么」分支，并加守卫挡考试报名、职业资格考试；车辆登记材料（上牌/过户）仍归车辆业务。影响面扫描：①「上牌带什么材料」不命中；②「注册登记要什么材料」不命中；③「考试报名要带什么」被 exclude 挡；④「异地考驾照要居住证吗」仍归本行。",
+      "positive": [
+        {
+          "q": "报名要带什么",
+          "expect": "APPLY:MATERIAL"
+        },
+        {
+          "q": "考驾照报名要带什么",
+          "expect": "APPLY:MATERIAL"
+        }
+      ],
+      "negative": [
+        {
+          "q": "上牌带什么材料",
+          "expect_not": "APPLY:MATERIAL",
+          "why": "车辆登记材料，归车辆业务"
+        },
+        {
+          "q": "注册登记要什么材料",
+          "expect_not": "APPLY:MATERIAL",
+          "why": "车辆登记"
+        },
+        {
+          "q": "考试报名要带什么",
+          "expect_not": "APPLY:MATERIAL",
+          "why": "考试报名不是驾照报名"
+        }
+      ]
     }
 
   ]
