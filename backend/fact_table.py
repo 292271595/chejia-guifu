@@ -37,6 +37,7 @@ from fact_common import (
     ADD_RULES, NO_YEAR_ADD, extract_codes, covers, covering_codes,
     norm, has, fmt_codes, num_style, detect_aspects, source, result,
     EXAM_TRANSFER_TOPIC, BODY_CHANGE_TOPIC, EXAM_LOCAL_APPLY_TOPIC,
+    ADD_TOPIC, ADD_SCORE_TOPIC,
     APPLY_MEDICAL_TOPIC, APPLY_MEDICAL_MED,
     RENEW_TOPIC, REISSUE_TOPIC,
     DOWNGRADE_TOPIC, DOWNGRADE_AGE, DOWNGRADE_EXCLUDE,
@@ -578,15 +579,32 @@ def q_downgrade(question: str) -> Optional[Dict]:
 
 
 def q_add(question: str) -> Optional[Dict]:
-    # 自证相关性：没有"增驾/增加"语义就不是增驾问题
-    # （旧实现因未加此守卫，"F证有年龄上限吗"会被当成"增驾摩托车"作答）
-    if not re.search(r"(增驾|增加)", question):
+    # 自证相关性：调度层与本函数共用 ADD_TOPIC/ADD_SCORE_TOPIC 一份判据，
+    # 避免「改了调度忘改处理器」的两处漂移（本项目已栽七次）。
+    # 旧实现只认「增驾/增加」，「想升A1/怎么升A1/C1增A1」整类掉检索层。
+    if not re.search(ADD_TOPIC, question) and not re.search(ADD_SCORE_TOPIC, question):
         return None
     codes = extract_codes(question)
 
-    # 目标车型：优先取"增驾X"中的 X
+    # 没有目标车型、问的是记分/满分记录影不影响增驾：第十七条一般条件现成，
+    # 但此前整类掉 RAG，「增驾前有满分记录还能增驾吗」还被满分学习处理器抢答。
+    if re.search(ADD_SCORE_TOPIC, question) and not codes:
+        return result(
+            "**会有影响，但只看有没有「记满 12 分」，不看扣了几分。**\n\n"
+            "申请增加准驾车型的一般条件（第十七条）：**本记分周期和申请前最近 1 个记分周期内"
+            "没有记满 12 分记录**。只是扣了几分、没到 12 分，不影响申请；"
+            "这两个周期里只要有一个周期记满过 12 分，就要先参加满分学习考试、清分后再申请。\n\n"
+            "另外，申请增加 A1、A2、A3、B1、B2 这些车型还有更严的一档："
+            "申请前最近连续 2 个或 3 个记分周期内不得有记满 12 分记录（第十七条第一款）。"
+            "具体按你要增驾的车型看。",
+            [source("《机动车驾驶证申领和使用规定》第十七条",
+                    "申请增加准驾车型的，应当在本记分周期和申请前最近1个记分周期内没有记满12分记录")],
+            "ADD:SCORE_IMPACT")
+
+    # 目标车型：优先取「增驾X / 升X / X升Y / X增Y」中的目标代号
     target = None
-    m = re.search(r"(?:增驾|增加)(?:准驾车型)?\s*(?:为)?\s*([ABCDEFMNP]\s*[1-6]?)", question, re.I)
+    m = re.search(r"(?:增驾|增加|升(?:级)?(?:为|到|成)?|增)\s*(?:准驾车型)?\s*(?:为)?\s*"
+                  r"([ABCDEFMNP]\s*[1-6]?)", question, re.I)
     if m:
         t = m.group(1).replace(" ", "").upper()
         if t in LICENSE_TABLE:
@@ -1306,7 +1324,7 @@ _HANDLERS = [
     # ── 17. 年龄驾驶限制 ──
     (q_age_drive, r"\d{2}\s*(?:周?岁)", QUALIFY | {"PROCEDURE"}),
     # ── 18. 增驾条件 ──
-    (q_add, r"(增驾|增加)", {"QUALIFY", "DURATION", "VALUE"}),
+    (q_add, ADD_TOPIC + "|" + ADD_SCORE_TOPIC, {"QUALIFY", "DURATION", "VALUE", "SCORE"}),
     # ── 19. 初次申领 ──
     (q_first_apply, r"(初次申领|第一次申领|直接考|直接申请|能直接|可以直接)", QUALIFY),
     # ── 20. 包含关系（能不能开某个车型）──

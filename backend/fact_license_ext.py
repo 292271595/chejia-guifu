@@ -21,7 +21,7 @@ from fact_common import (extract_codes, covers, source, result, has, norm, cn2in
                          EXAM_TRANSFER_TOPIC, EXAM_TRANSFER_SCOPE, EXAM_TRANSFER_EXCLUDE,
                          APPLY_MEDICAL_TOPIC, APPLY_MEDICAL_MED, APPLY_MEDICAL_EXCLUDE,
                          RENEW_TOPIC, RENEW_HOW, RENEW_CTX, RENEW_CTX_EXCLUDE,
-                         EXAM_LOCAL_APPLY_TOPIC, is_exam_local_apply)
+                         EXAM_LOCAL_APPLY_TOPIC, is_exam_local_apply, ADD_SCORE_TOPIC)
 
 LAW = "《机动车驾驶证申领和使用规定》（公安部令第172号）"
 LAW_SCORE = "《道路交通安全违法行为记分管理办法》（公安部令第163号）"
@@ -889,6 +889,10 @@ def q_full_score(q: str) -> Optional[Dict]:
     还要**加考科目二+科目三**。    拿 35 分的人照原答案办，学完考完科目一
     以为完事，实际还有一门没考，驾驶证领不回来，白跑一趟车管所。
     """
+    # 2026-11-19：「增驾前有满分记录还能增驾吗」问的是增驾资格条件，
+    # 不是满分学习流程。这类问法交回 q_add 的 ADD:SCORE_IMPACT 分支。
+    if re.search(ADD_SCORE_TOPIC, q):
+        return None
     # 「科目一满分是多少」问的是**卷面满分**（GA 1026：100 分），不是记分满分。
     # 调度主题词现在也接「满分了怎么办」这类省略说法，两类「满分」必须在这里
     # 分开：卷面满分的问题交给考试处理器/检索层，不能答成满分学习流程。

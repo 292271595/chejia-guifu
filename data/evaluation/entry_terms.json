@@ -806,6 +806,30 @@
         { "q": "外地车牌怎么迁到本地", "expect": "VEHICLE:RELOCATE", "why": "车辆转籍，不是考驾照" },
         { "q": "外地人考驾照要居住证吗", "expect": "APPLY:MATERIAL", "why": "材料问法由原表行接，避免双答案" }
       ]
+    },
+    {
+      "term": "想升A1要啥条件",
+      "handler": "q_add",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 34/35 题：q_add 入口只认「增驾/增加」，「想升A1/怎么升A1/C1增A1要多久/A2升A1」整类掉检索层；「记分影响增驾吗」连条件答案都没有，还被满分学习处理器抢答。判据抽 ADD_TOPIC/ADD_SCORE_TOPIC 给调度层与处理器共用（两处漂移坑第8次）。同类影响面扫描：①「升职/系统升级/温度/会员升级」没有车型代号，ADD_TOPIC 要求「升」后跟车型或驾证语境，实测四条全不命中；②「降级怎么办/A1降成C1」是降级处理器，实测仍归 DOWNGRADE:VOLUNTARY；③「升级到63岁」是年龄处理器，实测仍归 AGE_DRIVE:63；④「摩托车增驾要体检吗」由 APPLY:MEDICAL 表行先接，不被抢；⑤「增驾前有满分记录还能增驾吗」在 q_full_score 入口让位给 ADD:SCORE_IMPACT，端到端核对无降级。",      "positive": [
+        { "q": "想升A1要啥条件", "expect": "ADD:A1" },
+        { "q": "怎么升A1", "expect": "ADD:A1" },
+        { "q": "C1增A1要多久", "expect": "ADD:A1" },
+        { "q": "A2升A1需要几年", "expect": "ADD:A1" },
+        { "q": "想升级到B1", "expect": "ADD:B1" },
+        { "q": "B2升A2条件", "expect": "ADD:A2" },
+        { "q": "记分影响增驾吗", "expect": "ADD:SCORE_IMPACT" },
+        { "q": "增驾前有满分记录还能增驾吗", "expect": "ADD:SCORE_IMPACT" }
+      ],
+      "negative": [
+        { "q": "升职加薪要什么条件", "expect_not": "ADD", "why": "不是驾证业务" },
+        { "q": "系统升级要多久", "expect_not": "ADD", "why": "系统升级，不是增驾" },
+        { "q": "温度升高多少", "expect_not": "ADD", "why": "温度升高，不是车型升级" },
+        { "q": "升级会员有什么用", "expect_not": "ADD", "why": "会员升级，不是准驾车型" },
+        { "q": "降级怎么办", "expect": "DOWNGRADE:VOLUNTARY", "why": "降级是另一业务" },
+        { "q": "升级到63岁能开什么车", "expect": "AGE_DRIVE:63", "why": "年龄限制，不是增驾条件" },
+        { "q": "摩托车增驾要体检吗", "expect": "APPLY:MEDICAL", "why": "体检归申请体检表行" }
+      ]
     }
 
   ]
