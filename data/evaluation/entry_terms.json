@@ -930,6 +930,92 @@
           "why": "考试报名不是驾照报名"
         }
       ]
+    },
+    {
+      "term": "什么是审验",
+      "handler": "q_review",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 55/73/74 题：什么是审验、审验前要不要处理违章、C1 扣分要不要学习，三条原本全掉检索层（q_review 弃权）。答案原本就在 q_review 的 REVIEW:LIST/NONAB 里，只补入口常量 REVIEW_TOPIC/REVIEW_C_LEARN 与两个分支（定义、前置条件），调度层引用同一常量避免两处漂移。影响面扫描：①「年检什么时候做」仍归 VEHICLE:CYCLE（车辆检验不是驾驶人审验）；②「审验要学多久」仍归 REVIEW:EDU；③「哪些人需要审验」仍归 REVIEW:LIST；④「C1 多久一审」仍归 REVIEW:NONAB；⑤「扣了6分能减分吗」归 SCORE:STUDY_REDUCE，不被审验接走。",
+      "positive": [
+        {
+          "q": "什么是审验",
+          "expect": "REVIEW:BASICS"
+        },
+        {
+          "q": "审验是啥",
+          "expect": "REVIEW:BASICS"
+        },
+        {
+          "q": "审验前要处理违章吗",
+          "expect": "REVIEW:BEFORE"
+        },
+        {
+          "q": "有违章能审验吗",
+          "expect": "REVIEW:BEFORE"
+        },
+        {
+          "q": "C1扣分要学习吗",
+          "expect": "REVIEW:NONAB"
+        }
+      ],
+      "negative": [
+        {
+          "q": "年检什么时候做",
+          "expect": "VEHICLE:CYCLE",
+          "why": "车辆检验，不是驾驶人审验"
+        },
+        {
+          "q": "审验要学多久",
+          "expect": "REVIEW:EDU",
+          "why": "学时问法归 EDU"
+        },
+        {
+          "q": "哪些人需要审验",
+          "expect": "REVIEW:LIST",
+          "why": "清单问法归 LIST"
+        },
+        {
+          "q": "扣了6分能减分吗",
+          "expect": "SCORE:STUDY_REDUCE",
+          "why": "学法减分，不归审验"
+        }
+      ]
+    },
+    {
+      "term": "能减多少",
+      "handler": "q_study_reduce",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 67/70 题：「能减多少」「哪些情况不能减」原句都不含「学法减分/减分」，q_study_reduce 入口一条不认，整句掉检索层。答案原本完整（第二十五条 6 分上限、第二十六条五项不予受理、第二十七条三种减分方式），只补入口口语与 LIST 分支，并把 q_score 调度 cov 补 LIST。影响面扫描：①「罚款能减多少」实测未命中，没被学法减分抢；②「减刑条件是什么」实测未命中；③「扣了6分能减分吗」仍归本行；④「实习期内可以学法减分吗」仍归本行且首句直接答不能；⑤「学法减分怎么申请」仍归本行。",
+      "positive": [
+        {
+          "q": "能减多少",
+          "expect": "SCORE:STUDY_REDUCE"
+        },
+        {
+          "q": "能减多少分",
+          "expect": "SCORE:STUDY_REDUCE"
+        },
+        {
+          "q": "哪些情况不能减",
+          "expect": "SCORE:STUDY_REDUCE"
+        },
+        {
+          "q": "扣了6分能减分吗",
+          "expect": "SCORE:STUDY_REDUCE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "罚款能减多少",
+          "expect_not": "SCORE:STUDY_REDUCE",
+          "why": "罚款不是记分"
+        },
+        {
+          "q": "减刑条件是什么",
+          "expect_not": "SCORE:STUDY_REDUCE",
+          "why": "刑罚减刑，不是学法减分"
+        }
+      ]
     }
 
   ]

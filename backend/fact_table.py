@@ -1154,7 +1154,7 @@ _HANDLERS = [
      {"PENALTY", "SCORE", "QUALIFY"}),
     # ── 7. 记分（含醉驾/学法减分/超员超载超速矩阵）──
     (fact_score.q_score,
-     r"(?:记|扣)\s*几?\s*分|扣[了过]?\s*\d+\s*分|几分|多少分|记分|扣分|减分|超速|超员|超载|超重|超限|学法减分|醉.{0,2}驾|饮酒|"
+     r"(?:记|扣)\s*几?\s*分|扣[了过]?\s*\d+\s*分|几分|多少分|记分|扣分|减分|能减多少|减多少分|不能减|超速|超员|超载|超重|超限|学法减分|醉.{0,2}驾|饮酒|"
      # "怎么处罚"是用户最常用的问法，但记分规则原先只认"记几分/扣几分"。
      # 于是"闯红灯怎么处罚"进不了记分表，掉到已停用的罚则兜底，最后交给检索层猜。
      # 记分本就是处罚的一部分，问处罚就该进来看一眼，匹配不上再交回检索。
@@ -1163,7 +1163,8 @@ _HANDLERS = [
      r"处罚|罚款|怎么罚|怎么处理",
      # PROCEDURE 要加：「学法减分怎么弄 / 怎么申请」是纯流程诉求，只带 PROCEDURE，
      # 原来被 cov 挡在门外，掉到 RAG 答成泛泛一段。记分业务本来就有办理流程。
-     SCORE_COV | QUALIFY | {"PROCEDURE"}),
+     # LIST 要给：「哪些情况不能减分」是清单诉求，只挂 SCORE/VALUE/PENALTY 会在门口被挡。
+     SCORE_COV | QUALIFY | {"PROCEDURE", "LIST"}),
     # ── 8. 身体条件（色盲/色弱/视力/身高/听力/肢体）──
     (q_physical,
      r"(色盲|色弱|辨色|视力|裸视|眼睛|单眼|身高|听力|耳聋|助听|上肢|下肢|手指|手掌|拇指|肢体|残疾|截肢)",
@@ -1240,7 +1241,10 @@ _HANDLERS = [
     #   接走、答成检验周期——regression 抓到过。刻意不加「年审」：年审的归属
     #   是 q_review。事故类处理器都在本条之前，「一审判决」不会漏进来。
     # ── 12.5 行政业务：审验 / 备案 / 身体状况变化 / 校车 / 境外军队换证 ──
-    (fact_admin.q_review, r"(审验|年审|一审|每年审)", {"DURATION", "PROCEDURE"}),
+    # 主题引用 fact_admin 的公共常量：正名/口语 + 「C类扣分要不要学习」（答案落 REVIEW:NONAB）。
+    # 「两处各写一份」本项目栽过多次，这里不再抄一遍正则。
+    (fact_admin.q_review, fact_admin.REVIEW_TOPIC + "|" + fact_admin.REVIEW_C_LEARN,
+     {"DURATION", "PROCEDURE", "QUALIFY"}),
     (fact_admin.q_overdue_review, r"审验", {"PENALTY"}),
     (fact_admin.q_school_bus, r"校车", {"DURATION", "PROCEDURE"}),
     (fact_admin.q_info_change,
