@@ -36,7 +36,7 @@ from fact_common import (
     AGE_RULES, AGE_SPECIAL, FORBIDDEN_AT_63, FORBIDDEN_AT_70, DOWNGRADE_RULES,
     ADD_RULES, NO_YEAR_ADD, extract_codes, covers, covering_codes,
     norm, has, fmt_codes, num_style, detect_aspects, source, result,
-    EXAM_TRANSFER_TOPIC, BODY_CHANGE_TOPIC,
+    EXAM_TRANSFER_TOPIC, BODY_CHANGE_TOPIC, EXAM_LOCAL_APPLY_TOPIC,
     APPLY_MEDICAL_TOPIC, APPLY_MEDICAL_MED,
     RENEW_TOPIC, REISSUE_TOPIC,
     DOWNGRADE_TOPIC, DOWNGRADE_AGE, DOWNGRADE_EXCLUDE,
@@ -1289,6 +1289,12 @@ _HANDLERS = [
     # 「变更考试地能几次」「考试地变更次数上限」问的是次数/上限，旧 cov 只有
     # PROCEDURE/SUBJECT，在诉求闸门就被挡掉；「变更考试地最多能变几次」还被
     # q_exam 的「最多 N 次」分支抢答成科目二三的 5 次，需在 q_exam 入口让位。
+    # ── 14.5 异地初次报考（便民 2.1 一证通考，必须早于变更考试地/异地换证）──
+    # 2026-11-19：「外地能考驾照吗」被 EXAM:TRANSFER 抢答成「变更考试地」，
+    # 「异地可以考驾照吗」被 RENEW:CROSS_REGION 抢答成「异地换证」。答案在
+    # APPLY:MATERIAL 表行，这里只做入口分流，判据与两个让位守卫共用公共函数。
+    (ext.q_exam_local_apply, EXAM_LOCAL_APPLY_TOPIC,
+     {"QUALIFY", "PROCEDURE", "LIST", "VALUE", "DURATION"}),
     (ext.q_exam_transfer, EXAM_TRANSFER_TOPIC,
      {"PROCEDURE", "SUBJECT", "VALUE", "DURATION", "QUALIFY"}),
     # ── 15.5 降级（自愿/超龄，必须早于年龄驾驶限制处理器）──

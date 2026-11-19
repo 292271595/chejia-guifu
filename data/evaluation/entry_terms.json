@@ -784,6 +784,29 @@
         { "q": "降级要体检吗", "expect": "PHYSICAL_REPORT:TABLE", "why": "体检需求归体检处理器" },
         { "q": "科目二补考", "expect": "EXAM:TIMES", "why": "考试业务，不能降级抢" }
       ]
+    },
+    {
+      "term": "外地能考驾照吗",
+      "handler": "q_exam_local_apply",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 20 题：问外地能不能考驾照，被 EXAM:TRANSFER 答成「变更考试地」，「异地可以考驾照吗」被 RENEW:CROSS_REGION 答成「异地换证」，「跨省考驾照可以吗」掉检索层。答案早在 APPLY:MATERIAL 表行（便民 2.1 一证通考），修的是入口与两个相邻处理器的让位，判据抽 is_exam_local_apply 一处共用。同类影响面扫描：①含「过了科一/考了一半/科目二/转回」的是变更考试地，EXCLUDE 挡回 EXAM:TRANSFER，实测六条全守住；②含「换证/补证/迁入」的是换证业务，挡回 RENEW:CROSS_REGION，实测「异地换证怎么办」仍归换证；③含「上牌/过户/年检/违章」的是车辆业务，实测「外地车牌怎么迁到本地」仍归 VEHICLE:RELOCATE；④已有「居住证/材料」问法仍由 APPLY:MATERIAL 表行接，不重复建答案。",
+      "positive": [
+        { "q": "外地能考驾照吗", "expect": "APPLY:MATERIAL:LOCAL" },
+        { "q": "异地可以考驾照吗", "expect": "APPLY:MATERIAL:LOCAL" },
+        { "q": "外省人能在本地考驾照吗", "expect": "APPLY:MATERIAL:LOCAL" },
+        { "q": "外地能报名考驾照吗", "expect": "APPLY:MATERIAL:LOCAL" },
+        { "q": "不在户籍地能考驾照吗", "expect": "APPLY:MATERIAL:LOCAL" },
+        { "q": "跨省考驾照可以吗", "expect": "APPLY:MATERIAL:LOCAL" },
+        { "q": "人在外地想考驾照怎么办", "expect": "APPLY:MATERIAL:LOCAL" }
+      ],
+      "negative": [
+        { "q": "C2过了科一要去外地怎么办", "expect": "EXAM:TRANSFER", "why": "考过科目后换城市，是变更考试地" },
+        { "q": "外地考了一半能转回来继续考吗", "expect": "EXAM:TRANSFER", "why": "考试进行中，不是初次报考" },
+        { "q": "异地换证怎么办", "expect": "RENEW:CROSS_REGION", "why": "换证业务，不是报考" },
+        { "q": "外地车牌怎么迁到本地", "expect": "VEHICLE:RELOCATE", "why": "车辆转籍，不是考驾照" },
+        { "q": "外地人考驾照要居住证吗", "expect": "APPLY:MATERIAL", "why": "材料问法由原表行接，避免双答案" }
+      ]
     }
+
   ]
 }

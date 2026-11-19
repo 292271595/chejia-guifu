@@ -13,12 +13,15 @@
 import re
 from typing import Dict, List, Optional
 
+import knowledge_table
+
 from fact_common import (extract_codes, covers, source, result, has, norm, cn2int,
                          LICENSE_TABLE, covers as _covers,
                          ABROAD_SELF as _ABROAD_SELF, ABROAD_EXPIRE as _ABROAD_EXPIRE,
                          EXAM_TRANSFER_TOPIC, EXAM_TRANSFER_SCOPE, EXAM_TRANSFER_EXCLUDE,
                          APPLY_MEDICAL_TOPIC, APPLY_MEDICAL_MED, APPLY_MEDICAL_EXCLUDE,
-                         RENEW_TOPIC, RENEW_HOW, RENEW_CTX, RENEW_CTX_EXCLUDE)
+                         RENEW_TOPIC, RENEW_HOW, RENEW_CTX, RENEW_CTX_EXCLUDE,
+                         EXAM_LOCAL_APPLY_TOPIC, is_exam_local_apply)
 
 LAW = "《机动车驾驶证申领和使用规定》（公安部令第172号）"
 LAW_SCORE = "《道路交通安全违法行为记分管理办法》（公安部令第163号）"
@@ -402,6 +405,11 @@ def _renew_overdue(years: float) -> Dict:
 # 三、换证 / 有效期 / 核发地变更
 # ============================================================
 def q_renew(q: str) -> Optional[Dict]:
+    # 2026-11-19：RENEW_TOPIC 含裸「异地」，会把「异地可以考驾照吗」当成异地换证。
+    # 初次报考归 APPLY:MATERIAL（便民 2.1 一证通考），这里先让位；已有换证/补证
+    # 等词的问句由 is_exam_local_apply 的排除表挡住，不会被误让位。
+    if is_exam_local_apply(q):
+        return None
     # "逾期"和"过期"是两个词：用户常说"逾期1年未换证怎么恢复"，
     # 只写"过期"会把整类问题漏到 RAG，模型只答流程不点明要考科目一。
     if not re.search(RENEW_TOPIC, q):
@@ -1408,6 +1416,25 @@ def q_penalty_fallback(q: str) -> Optional[Dict]:
         "PENALTY:FALLBACK")
 
 
+def q_exam_local_apply(q: str) -> Optional[Dict]:
+    """异地初次报考（便民措施 2.1 全国「一证通考」）。
+
+    答案不在这里重写：APPLY:MATERIAL 表行已经逐字核过便民 2.1/2.4 与第二十二、
+    二十三条原文，这里只负责把「外地能不能考驾照」这一类口语送进去，避免
+    两处答案漂移。2026-11-19 第一批摸底时这类问法分别被 EXAM:TRANSFER（答成
+    变更考试地）和 RENEW:CROSS_REGION（答成异地换证）抢走。
+    """
+    if not is_exam_local_apply(q):
+        return None
+    row = knowledge_table.find("APPLY:MATERIAL")
+    if not row:
+        return None
+    src = [{"title": s.get("title", ""), "source": s.get("file", ""),
+            "score": 1.0, "snippet": (s.get("quote") or "")[:300]}
+           for s in row.get("sources") or []]
+    return result(row.get("answer") or "", src, "APPLY:MATERIAL:LOCAL")
+
+
 def q_exam_transfer(q: str) -> Optional[Dict]:
     """变更考试地（第三十九条第三款）。
 
@@ -1419,6 +1446,10 @@ def q_exam_transfer(q: str) -> Optional[Dict]:
     # 2026-11-19 补：原第二道守卫只认「科目|考试」，漏掉「科一/科二」「考了一半」
     # 这些真实口语（「C2过了科一要去外地怎么办」整句掉 RAG）。
     if re.search(EXAM_TRANSFER_EXCLUDE, q):
+        return None
+    # 「外地能考驾照吗」问的是初次异地报考（一证通考），不是「考到一半换城市」。
+    # 2026-11-19 摸底时这句被抢答成第三十九条第三款，属于入口过宽，先让位。
+    if is_exam_local_apply(q):
         return None
     if not re.search(EXAM_TRANSFER_TOPIC, q):
         return None
@@ -1446,7 +1477,7 @@ def q_exam_transfer(q: str) -> Optional[Dict]:
 
 
 def q_license_ext(question: str) -> Optional[Dict]:
-    for fn in (q_exam_transfer, q_recover_window, q_status_drive, q_color_weak, q_limb, q_physical_report,
+    for fn in (q_exam_local_apply, q_exam_transfer, q_recover_window, q_status_drive, q_color_weak, q_limb, q_physical_report,
                q_internship_extra,
                q_cancel_list, q_no_ab, q_full_score, q_period, q_renew,
                q_penalty_fallback):
