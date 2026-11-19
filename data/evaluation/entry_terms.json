@@ -831,6 +831,27 @@
         { "q": "摩托车增驾要体检吗", "expect": "APPLY:MEDICAL", "why": "体检归申请体检表行" }
       ]
     }
+    ,
+    {
+      "term": "安全文明驾驶是科四吗",
+      "handler": "q_exam",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 12 题：q_exam 四个诉求闸门只认考什么/多少分/几次/多久，「是什么/是不是科四/就是…吗」整句弃权掉检索层（audit 主题命中 q_exam 却返回 None）。答案现成在 EXAM:S4_CONTENT，只补定义确认诉求门 SUBJECT_DEFINE_*，带科目语境+时间/分数/挂科反向守卫。同类影响面扫描：①科四别名「科目四/科四/文明驾驶」在 colloquial_terms.md 明确列出，正向 7 条实测全落 S4_CONTENT；②「满分多少」是分数口语，负向断言让 q_full_score 不接、由 q_exam 收，实测落 EXAM:PASS_SAFE；③「交通安全文明驾驶教育/审验学文明驾驶/文明驾驶宣誓/文明驾驶学习」是领证教育、审验、宣誓语境（第六十/七十一/九十条），入口守卫实测四条全弃权，不被答成科四定义；④科目二三纯定义（科目二是什么/科目三是什么）仍归各自 S2/S3_CONTENT，未被抢；⑤「科四什么时候考/怎么约考/考几次」分别归 YUEKAO_GAP/TIMES，反向守卫实测守住。",
+      "positive": [
+        { "q": "安全文明驾驶是科四吗", "expect": "EXAM:S4_CONTENT" },
+        { "q": "科目四是什么", "expect": "EXAM:S4_CONTENT" },
+        { "q": "科四是不是安全文明驾驶", "expect": "EXAM:S4_CONTENT" },
+        { "q": "文明驾驶是什么意思", "expect": "EXAM:S4_CONTENT" },
+        { "q": "安全文明驾驶满分多少", "expect": "EXAM:PASS_SAFE" }
+      ],
+      "negative": [
+        { "q": "交通安全文明驾驶教育是什么", "expect_not": "EXAM:S4_CONTENT", "why": "领证教育语境（第六十条），不是科四定义" },
+        { "q": "审验要学文明驾驶吗", "expect_not": "EXAM:S4_CONTENT", "why": "审验学习语境（第七十一条）" },
+        { "q": "文明驾驶宣誓是什么", "expect_not": "EXAM:S4_CONTENT", "why": "领证宣誓语境，不是科四" },
+        { "q": "文明驾驶学习要多久", "expect_not": "EXAM:S4_CONTENT", "why": "问学习时长，定义守卫挡掉" },
+        { "q": "科四什么时候考", "expect_not": "EXAM:S4_CONTENT", "why": "问约考时间，归 YUEKAO_GAP" }
+      ]
+    }
 
   ]
 }
