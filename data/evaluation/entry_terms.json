@@ -764,6 +764,26 @@
         { "q": "申请补证要体检吗", "expect": "PHYSICAL_REPORT:TABLE", "why": "问体检不是补证业务" },
         { "q": "驾驶证损毁了怎么换", "expect": "RENEW:DAMAGED_30", "why": "损毁换证30日，不是补领" }
       ]
+    },
+    {
+      "term": "降级",
+      "handler": "q_downgrade",
+      "added_at": "2026-11-19",
+      "why": "用户问答清单第26/27/28题降级问法：三种降级（自愿/超龄/身体条件变化）被检索层全答成第六十七条「30日+身体条件证明」，A1降C1甚至答暂无信息。新增 q_downgrade 只接自愿降级（第六十七条末款，不用体检）与超龄换领（第六十五条分档）；身体变化降级让位 BODY_CHANGE，能开/延期让位 q_age_drive。影响面扫描：①含「降级」的身体变化问句用 DOWNGRADE_EXCLUDE 挡回 BODY_CHANGE；②含年龄的能开/延期问句（63岁能开大客车/A2到60岁怎么办）早已有 AGE_DRIVE 专属处理，本族 EXCLUDE 挡「能开/延期」不抢；③「降级要体检吗」归体检处理器；④增驾/考试/记分等相邻业务实测均未被抢。端到端六条复核全 OK。",
+      "positive": [
+        { "q": "超龄降级怎么办", "expect": "DOWNGRADE:AGE" },
+        { "q": "63岁降级怎么办", "expect": "DOWNGRADE:AGE" },
+        { "q": "自愿降级怎么办", "expect": "DOWNGRADE:VOLUNTARY" },
+        { "q": "A1能降成C1吗", "expect": "DOWNGRADE:VOLUNTARY" },
+        { "q": "60岁降级怎么办", "expect": "DOWNGRADE:VOLUNTARY" }
+      ],
+      "negative": [
+        { "q": "身体条件变化要降级吗", "expect": "BODY_CHANGE", "why": "身体变化降级归身体条件处理器，不是自愿/超龄降级" },
+        { "q": "63岁能开大客车吗", "expect": "AGE_DRIVE:63:A1", "why": "问能否驾驶，不是降级办理" },
+        { "q": "A2到60岁怎么办", "expect": "AGE_DRIVE:60:A2", "why": "到龄能否继续开，不是降级办理流程" },
+        { "q": "降级要体检吗", "expect": "PHYSICAL_REPORT:TABLE", "why": "体检需求归体检处理器" },
+        { "q": "科目二补考", "expect": "EXAM:TIMES", "why": "考试业务，不能降级抢" }
+      ]
     }
   ]
 }

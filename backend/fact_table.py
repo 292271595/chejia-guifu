@@ -39,6 +39,7 @@ from fact_common import (
     EXAM_TRANSFER_TOPIC, BODY_CHANGE_TOPIC,
     APPLY_MEDICAL_TOPIC, APPLY_MEDICAL_MED,
     RENEW_TOPIC, REISSUE_TOPIC,
+    DOWNGRADE_TOPIC, DOWNGRADE_AGE, DOWNGRADE_EXCLUDE,
 )
 
 import fact_admin
@@ -470,6 +471,110 @@ def q_age_drive(question: str) -> Optional[Dict]:
     return result("\n".join(lines),
                   [source(f"《机动车驾驶证申领和使用规定》{law}", lines[0].replace("**", ""))],
                   f"AGE_DRIVE:{age}:{code}")
+
+
+def _voluntary_downgrade(question: str, codes, note: str = "") -> Dict:
+    """自愿降级答案（第六十七条末款），供自愿分支和「未到强制换领年龄」复用。"""
+    tail = note
+    if codes and codes[0] in LICENSE_TABLE:
+        tail += f"你问的 {codes[0]}（{LICENSE_TABLE[codes[0]]['name']}）" + (
+            "可以自愿降为小型汽车（C1/C2）。\n\n" if codes[0] in FORBIDDEN_AT_63 + FORBIDDEN_AT_70
+            else "的自愿降级按下列规定办理。\n\n")
+    return result(
+        tail +
+        "**自愿降低准驾车型**：确认申请信息，提交**身份证明和机动车驾驶证**即可，"
+        "**不需要身体条件证明、不用体检**（第六十七条末款）。\n\n"
+        "到核发地或核发地以外的车辆管理所办理，属「自愿降低准驾车型换证」，"
+        "需收存原驾驶证原件（《机动车驾驶证业务工作规范》第七十条）。\n\n"
+        "⚠️ 这和两种情形不同：①身体条件不符合了才降级，要交医疗机构身体条件证明、30 日内办"
+        "（第六十七条前款）；②到年龄的换领按第六十五条分档，也需身体条件证明。自愿降级本身不体检。",
+        [source("《机动车驾驶证申领和使用规定》第六十七条",
+                "机动车驾驶人自愿降低准驾车型的，应当确认申请信息，"
+                "并提交机动车驾驶人的身份证明和机动车驾驶证。")],
+        "DOWNGRADE:VOLUNTARY")
+
+
+def q_downgrade(question: str) -> Optional[Dict]:
+    """三种「降级」里只接自愿降级和超龄降级；身体条件变化降级归 BODY_CHANGE。
+
+    端到端实测（2026-11-19）：「超龄降级怎么办」「自愿降级怎么办」「A1能降成C1吗」
+    全被检索层答成第六十七条「30 日 + 身体条件证明」——那是身体变化那类的答案，
+    把自愿降级（不用体检）和超龄换领（第六十五条）都讲错了。
+    """
+    if not re.search(DOWNGRADE_TOPIC, question):
+        return None
+    if re.search(DOWNGRADE_EXCLUDE, question):
+        return None
+    codes = extract_codes(question)
+
+    # 超龄降级：年龄到线，按第六十五条换领（不是第六十七条的 30 日身体变化降级）
+    if re.search(DOWNGRADE_AGE, question):
+        m_age = re.search(r"(\d{2})\s*(?:周?岁)", question)
+        age_n = int(m_age.group(1)) if m_age else None
+        # 明确点出未到线的年龄（如「60岁降级怎么办」）：此时不存在到龄强制换领，
+        # 用户问的「降级」实为自愿降级。直接答办理流程，别答一堆年龄分档——
+        # 否则复核层判「讲的是换领规定、不是降级怎么办」退回原文（2026-11-19）。
+        if age_n is not None and age_n < 63:
+            return _voluntary_downgrade(
+                question, codes,
+                f"{age_n} 周岁还没到法定换领年龄（大型车 63 周岁、摩托车 70 周岁才到线），"
+                "这个年龄办降级属于自愿降级：\n\n")
+        # 带具体车型：精确给出换领目标
+        if codes:
+            code = codes[0]
+            if code in DOWNGRADE_RULES:
+                rule = DOWNGRADE_RULES[code]
+                name = LICENSE_TABLE[code]["name"]
+                law = "第六十五条第一款" if code in FORBIDDEN_AT_63 else "第六十五条第二款"
+                return result(
+                    f"**到年龄降级：{code}（{name}）按规定换领准驾车型。** "
+                    f"达到规定年龄后不得继续驾驶该车型，应当：{rule}。\n\n"
+                    "凭身份证明、驾驶证到核发地或核发地以外的车辆管理所办理换领，"
+                    "此项属「达到规定年龄换证」，需审查身体条件证明"
+                    "（《机动车驾驶证业务工作规范》第七十条）。\n\n"
+                    "⚠️ A1/A2/A3/B1/B2/M/N/P 是 **63 周岁**、C3/C4/C6/D/E 是 **70 周岁** 到线；"
+                    "C1/C2/C5/F 不受年龄上限限制。A1/A2 等大型车若需继续驾驶，"
+                    "可在满 63 周岁前 1 年内经三力测试申请延长，最长 3 年（第六十五条第一款）。",
+                    [source("《机动车驾驶证申领和使用规定》第六十五条",
+                            "年龄在63周岁以上的，不得驾驶大型客车、重型牵引挂车、城市公交车、中型客车、"
+                            "大型货车、轮式专用机械车、无轨电车和有轨电车。持有大型客车、重型牵引挂车、"
+                            "城市公交车、中型客车、大型货车驾驶证的，应当到机动车驾驶证核发地或者核发地以外的"
+                            "车辆管理所换领准驾车型为小型汽车或者小型自动挡汽车的机动车驾驶证")],
+                    f"DOWNGRADE:AGE:{code}")
+        # 没点车型：给分档清单。若点明了具体年龄，先点明是否到线——
+        # 否则「60岁降级怎么办」的答案只写 63/70，复核层会误报「问句提到 60 岁，答案未涉及」。
+        m_age = re.search(r"(\d{2})\s*(?:周?岁)", question)
+        prefix = ""
+        if m_age:
+            age_n = int(m_age.group(1))
+            if age_n < 63:
+                prefix = (f"**{age_n} 周岁还没到法定换领年龄**（大型车 63 周岁、摩托车 70 周岁才到线）。"
+                          "如果是自愿降级，随时可办、不用体检；下面说的是到年龄后的换领规则。\n\n")
+            else:
+                prefix = f"**{age_n} 周岁**：按下面的年龄分档换领。\n\n"
+        return result(
+            prefix +
+            "**到年龄降级，就是按规定换领准驾车型，按年龄分两档（第六十五条）：**\n\n"
+            "**63 周岁到线**：A1 大型客车、A2 重型牵引挂车、A3 城市公交车、B1 中型客车、"
+            "B2 大型货车、M 轮式专用机械车、N 无轨电车、P 有轨电车——换领 C1 或 C2；"
+            "其中 A2 还可以保留 C6（轻型牵引挂车）。\n\n"
+            "**70 周岁到线**：C3 低速载货汽车、C4 三轮汽车、C6 轻型牵引挂车、D 普通三轮摩托车、"
+            "E 普通二轮摩托车——D/E 换领 F（轻便摩托车），C6 换领 C1 或 C2。\n\n"
+            "**不受年龄上限**：C1、C2、C5、F。\n\n"
+            "带身份证明、驾驶证到核发地或核发地以外的车辆管理所办理，属「达到规定年龄换证」，"
+            "需审查身体条件证明（业务工作规范第七十条）。大型车想继续开的，"
+            "可在满 63 周岁前 1 年内经三力测试申请延长，最长 3 年。",
+            [source("《机动车驾驶证申领和使用规定》第六十五条",
+                    "年龄在63周岁以上的，不得驾驶大型客车、重型牵引挂车、城市公交车、中型客车、"
+                    "大型货车、轮式专用机械车、无轨电车和有轨电车……年龄在70周岁以上的，"
+                    "不得驾驶低速载货汽车、三轮汽车、轻型牵引挂车、普通三轮摩托车、普通二轮摩托车")],
+            "DOWNGRADE:AGE")
+
+    # 自愿降级：第六十七条末款——不用体检，身份证明 + 驾驶证即可
+    # 走到这里已排除超龄分支与 DOWNGRADE_EXCLUDE（身体变化/能开延期），
+    # 剩下的降级诉求一律按自愿答；不再另设 voluntary 判据，否则「降C1吗」
+    # 这类「降+车型」口语（没有「降级/自愿」字样）会漏。
+    return _voluntary_downgrade(question, codes)
 
 
 def q_add(question: str) -> Optional[Dict]:
@@ -1186,6 +1291,10 @@ _HANDLERS = [
     # q_exam 的「最多 N 次」分支抢答成科目二三的 5 次，需在 q_exam 入口让位。
     (ext.q_exam_transfer, EXAM_TRANSFER_TOPIC,
      {"PROCEDURE", "SUBJECT", "VALUE", "DURATION", "QUALIFY"}),
+    # ── 15.5 降级（自愿/超龄，必须早于年龄驾驶限制处理器）──
+    # 2026-11-19：三种降级里身体变化归 BODY_CHANGE、能开/延期归 q_age_drive，
+    # 这里只接自愿降级与超龄换领。原样全被检索层答成第六十七条 30 日降级。
+    (q_downgrade, DOWNGRADE_TOPIC, {"PROCEDURE", "QUALIFY", "DURATION"}),
     # ── 16. 70 周岁以上可申请车型（必须早于年龄驾驶限制）──
     (q_age70_apply, r"70\s*(?:周?岁)", QUALIFY | {"VALUE", "PROCEDURE"}),
     # ── 17. 年龄驾驶限制 ──
