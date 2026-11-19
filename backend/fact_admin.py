@@ -19,7 +19,7 @@ import re
 from typing import Dict, Optional
 
 from fact_common import (source, result, LICENSE_TABLE, extract_codes, ABROAD_SELF, ABROAD_EXPIRE,
-                         BODY_CHANGE_TOPIC, BODY_CHANGE_EXCLUDE)
+                         BODY_CHANGE_TOPIC, BODY_CHANGE_EXCLUDE, REISSUE_TOPIC, REISSUE_EXCLUDE)
 
 LAW = "《机动车驾驶证申领和使用规定》（公安部令第172号）"
 LAW_REG = "《机动车登记规定》（公安部令第164号）"
@@ -588,7 +588,10 @@ def q_vehicle_reg(q: str) -> Optional[Dict]:
             "REG:SCRAP")
 
     # 号牌/行驶证/驾驶证补领
-    if re.search(r"(号牌|牌照|行驶证|驾驶证).{0,6}(丢|灭失|遗失|补)", q) or re.search(r"补(领|办|发)", q):
+    # 2026-11-19：口语入口接不住——处理器正文答案齐全（原证作废、核发地或以外、
+    # 扣留期间不得补发、1 日内），但手写正则只认「遗失/补领」，「丢了/补证/补办/
+    # 补发/掉了」全漏；调度正则又另写一份。判据抽公共常量，调度+处理器共用。
+    if re.search(REISSUE_TOPIC, q) and not re.search(REISSUE_EXCLUDE, q):
         return result(
             "**补领分两种，办理渠道不同：**\n\n"
             "**1. 机动车号牌、行驶证灭失/丢失/损毁**：向**登记地**车辆管理所申请补领、换领，"

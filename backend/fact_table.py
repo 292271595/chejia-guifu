@@ -38,7 +38,7 @@ from fact_common import (
     norm, has, fmt_codes, num_style, detect_aspects, source, result,
     EXAM_TRANSFER_TOPIC, BODY_CHANGE_TOPIC,
     APPLY_MEDICAL_TOPIC, APPLY_MEDICAL_MED,
-    RENEW_TOPIC,
+    RENEW_TOPIC, REISSUE_TOPIC,
 )
 
 import fact_admin
@@ -1135,10 +1135,14 @@ _HANDLERS = [
     (fact_admin.q_disease,
      r"(癫痫|心脏病|精神病|痴呆|眩晕|帕金森|震颤麻痹|癔病|美尼尔|器质性)", QUALIFY),
     (fact_admin.q_forever, r"(终生|终身)", {"LIST", "QUALIFY"}),
+    # 2026-11-19：主题正则并入补证口语常量（与处理器同一份，避免两处漂移）——
+    # 原正则只认「遗失/补领」，「驾驶证丢了/补证要回原籍/扣留期间能补证」进不来。
     (fact_admin.q_vehicle_reg,
      r"(抵押|变更登记|颜色|发动机|车架|改装|报废|注销登记|号牌|牌照|遗失|补领|电子|检验标志|年检标志|"
-     r"临时身份证|(身份证|身份证明).{0,8}(变更|更新|号码|换了|变了))",
-     {"PROCEDURE", "QUALIFY", "LIST", "SIGN"}),
+     r"临时身份证|(身份证|身份证明).{0,8}(变更|更新|号码|换了|变了))"
+     r"|" + REISSUE_TOPIC,
+     # DURATION：「驾驶证补发要多久」问补发时限（1 日内），处理器正文有，少了它在诉求门被挡。
+     {"PROCEDURE", "QUALIFY", "LIST", "SIGN", "DURATION"}),
     (fact_admin.q_locked, r"锁定", {"DEFINE", "QUALIFY"}),
     # 轻微事故视频快处：答案带"仅试点城市"这个硬限定，不能交给模型自由发挥
     (fact_admin.q_video_fast, r"(视频|快处|快赔)",

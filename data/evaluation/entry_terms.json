@@ -744,6 +744,26 @@
         { "q": "变更考试地最多能变几次", "expect": "EXAM:TRANSFER", "why": "问考试地变更次数，不是换证" },
         { "q": "驾驶证损毁了怎么换", "expect": "RENEW:DAMAGED_30", "why": "损毁换证是30日分支，不是期满90日" }
       ]
+    },
+    {
+      "term": "驾驶证丢了怎么补",
+      "handler": "q_vehicle_reg",
+      "added_at": "2026-11-19",
+      "why": "用户问答清单第43/44/90条补证口语问法：REG:REISSUE 处理器正文答案齐全（核发地或核发地以外、原证作废、扣留期间不得补发、1日内），但调度正则只认「遗失/补领」两个书面词，处理器入口也偏窄，「丢了/补证/补办/补发/扣留期间补」全漏 RAG。判据抽公共常量 REISSUE_TOPIC/EXCLUDE 调度+处理器共用，cov 补 DURATION。正向同义与反向守卫在此登记。",
+      "positive": [
+        { "q": "驾驶证丢了怎么补", "expect": "REG:REISSUE" },
+        { "q": "补证要回原籍吗", "expect": "REG:REISSUE" },
+        { "q": "补了新证旧证还能用吗", "expect": "REG:REISSUE" },
+        { "q": "扣留期间能补证吗", "expect": "REG:REISSUE" },
+        { "q": "驾驶证补发要多久", "expect": "REG:REISSUE" }
+      ],
+      "negative": [
+        { "q": "补考要预约吗", "expect_not": "REG:REISSUE", "why": "补考是考试业务，不是证件补领" },
+        { "q": "补缴罚款", "expect_not": "REG:REISSUE", "why": "补缴罚款不是补证" },
+        { "q": "补办身份证", "expect_not": "REG:REISSUE", "why": "补办身份证不是驾证补领" },
+        { "q": "申请补证要体检吗", "expect": "PHYSICAL_REPORT:TABLE", "why": "问体检不是补证业务" },
+        { "q": "驾驶证损毁了怎么换", "expect": "RENEW:DAMAGED_30", "why": "损毁换证30日，不是补领" }
+      ]
     }
   ]
 }
