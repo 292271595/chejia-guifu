@@ -290,6 +290,13 @@ def q_exam(question: str) -> Optional[Dict]:
     if re.search(r"(境外|国外|外国|港澳台|香港|澳门|台湾)", q):
         return None
     codes = extract_codes(q)
+    # 口语「大车」泛指 A1/A2/A3/B1/B2 五种车型，不是某一具体代号：全局 ALIAS 表
+    # 没有这个统称（只有「大客车」「大货车」等单车型），extract_codes 抽不到，
+    # 后面就会按默认 C1 答。线上「大车科二考啥」因此答成小车项目，和检索到的
+    # 第三十三条原文（大车是桩考、单边桥、限宽门…对不上）。这里只在本处理器内
+    # 认这个统称，不改全局别名表——别的域对「大车」有自己的口径（如记分学习时长）。
+    big_group = bool(re.search(r"(大车|大中型客货车|大中型|A类|B类|AB类)", q)) \
+        and not any(c in AB_CODES for c in codes)
     # 目标车型：优先取"增驾X"里的 X
     target = None
     m = re.search(r"(?:增驾|增加)(?:准驾车型)?\s*(?:为)?\s*([ABCDEFMNP]\s*[1-6]?)", q, re.I)
@@ -312,7 +319,8 @@ def q_exam(question: str) -> Optional[Dict]:
     # 而用户写的是「考啥」。所以通用支也必须认「考啥」「考哪些」这些口语写法。
     asks_subject = bool(re.search(r"(考什么|考啥|考哪些|考哪几|考几[科个]|几个科目|考试内容|要考|考不考|"
                                   r"考科目|科目[一二三四].{0,4}(?:考什么|考啥|内容|有哪些|是什么|考哪)|"
-                                  r"考什么科目|考啥科目|考试科目|哪些科目)", q))
+                                  r"考什么科目|考啥科目|考试科目|哪些科目|"
+                                  r"考哪几项|考试项目|科目[二三]项目)", q))
     asks_score = bool(re.search(r"(多少分|几分|及格|合格标准|合格线|多少算过|分数线)", q))
     # "考几次/补考/不合格多久能再约"是程序性诉求，不含"科目/分数"字样，
     # 单独识别，否则会被下面的守卫直接挡掉（曾把"考试不合格多久可以重新预约"打成 None）
@@ -525,7 +533,9 @@ def q_exam(question: str) -> Optional[Dict]:
                     "EXAM:YUEKAO_GAP_SAFE")
 
             if s2 and not s3:
-                if code in ("A1", "A2", "A3", "B1", "B2", "C6"):
+                if big_group:
+                    head = "**大车（A1/A2/A3/B1/B2）科目二：取得学习驾驶证明满 20 日后可以预约考试。**"
+                elif code in ("A1", "A2", "A3", "B1", "B2", "C6"):
                     head = f"**{code} 科目二：取得学习驾驶证明满 20 日后可以预约考试。**"
                 elif code:
                     head = f"**{code} 科目二：取得学习驾驶证明满 10 日后可以预约考试。**"
@@ -872,8 +882,15 @@ def q_exam(question: str) -> Optional[Dict]:
     # ── 4. 科目内容 ──
     if re.search(r"科目二", q):
         code = target if target else (codes[0] if codes else None)
-        key, items = _subj2_items(code)
-        name = f"{code}（{LICENSE_TABLE[code]['name']}）" if code else "小型汽车（C1）"
+        if big_group and code is None:
+            # 大车五种车型的科目二项目在第三十三条第一项里是同一张清单（桩考、
+            # 单边桥、限宽门、窄路掉头、模拟高速/山区/隧道…），不能用默认 C1 的
+            # 五项去答。只在这里认定统称，A1/A2/A3/B1/B2 具体代号仍走原分支。
+            key, items = "AB", SUBJECT2_ITEMS["AB"]
+            name = "大型客车（A1）、重型牵引挂车（A2）、城市公交车（A3）、中型客车（B1）、大型货车（B2）"
+        else:
+            key, items = _subj2_items(code)
+            name = f"{code}（{LICENSE_TABLE[code]['name']}）" if code else "小型汽车（C1）"
         return result(
             f"**科目二是「场地驾驶技能考试科目」**（第三十条第一款）。\n\n"
             f"{name} 的科目二考试项目（第三十三条）：{items}。\n\n"
