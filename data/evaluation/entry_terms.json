@@ -1016,6 +1016,117 @@
           "why": "刑罚减刑，不是学法减分"
         }
       ]
+    },
+    {
+      "term": "70岁每年交身体证明",
+      "handler": "q_physical_report",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 81 题：问句只说「身体证明」，少了「条件」二字，体检周期处理器入口与调度主题都不认。答案现成（PHYSICAL_REPORT:70，第七十四条）。影响面扫描：①「换证要体检吗」仍归换证/申请体检；②「体检去哪做」归 PHYSICAL:WHERE；③「C5多久体检」归 PHYSICAL_REPORT:C5；④「体检报告什么时候交」仍归本行。",
+      "positive": [
+        {
+          "q": "70岁每年交身体证明",
+          "expect": "PHYSICAL_REPORT:70"
+        },
+        {
+          "q": "70岁以上每年体检吗",
+          "expect": "PHYSICAL_REPORT:70"
+        }
+      ],
+      "negative": [
+        {
+          "q": "体检去哪做",
+          "expect": "PHYSICAL:WHERE",
+          "why": "问地点不归周期表"
+        },
+        {
+          "q": "C5多久体检一次",
+          "expect": "PHYSICAL_REPORT:C5",
+          "why": "C5 是每 3 年"
+        }
+      ]
+    },
+    {
+      "term": "三力测试是啥",
+      "handler": "q_three_force",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 83/84 题：三力测试原先进不了任何处理器（只散落在换证分支）。新增独立处理器 q_three_force，答定义、谁要做、怎么考；知识库无「20 题 20 分钟」原文，按纪律不补数字。影响面扫描：①「70岁换证要测试吗」仍归 RENEW:AGE70；②「70岁能开什么车」归 AGE_DRIVE；③「记忆力下降还能开车吗」不归本处理器；④「考驾照多大年龄」归 AGE:APPLY。",
+      "positive": [
+        {
+          "q": "三力测试是啥",
+          "expect": "PHYSICAL:THREE_FORCE"
+        },
+        {
+          "q": "三力测试怎么考",
+          "expect": "PHYSICAL:THREE_FORCE"
+        },
+        {
+          "q": "记忆力判断力反应力测试是什么",
+          "expect": "PHYSICAL:THREE_FORCE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "考驾照多大年龄",
+          "expect": "AGE:APPLY_ALL",
+          "why": "申请年龄"
+        },
+        {
+          "q": "70岁还能开什么车",
+          "expect": "AGE_DRIVE:70",
+          "why": "准驾范围"
+        }
+      ]
+    },
+    {
+      "term": "警医邮网点能办吗",
+      "handler": "q_post_office",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 46 题：邮政/警医邮网点问法全掉检索层。便民 6.1 有「邮政网点可代办补换领驾驶证/行驶证、申领免检标志、自助处理交通违法」逐字原文；「警医邮」无全国统一名称，按纪律写成地方联合模式、以当地为准。影响面扫描：①「驾驶证能邮寄吗」被 exclude 挡、不命中；②「换证去哪办」归 RENEW；③「12123怎么换证」归流程；④「上牌去哪」归车辆登记。",
+      "positive": [
+        {
+          "q": "警医邮网点能办吗",
+          "expect": "EDGE:POST_OFFICE"
+        },
+        {
+          "q": "邮政网点能换驾驶证吗",
+          "expect": "EDGE:POST_OFFICE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "驾驶证能邮寄吗",
+          "expect_not": "EDGE:POST_OFFICE",
+          "why": "邮寄不是网点代办"
+        }
+      ]
+    },
+    {
+      "term": "电子驾驶证和纸质版一样吗",
+      "handler": "q_e_license",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 88 题：电子驾驶证效力问法全掉检索层。便民 2.8 有「与纸质驾驶证具有同等法律效力，全国范围内有效」逐字原文。影响面扫描：①「电子驾驶证申请不成功」被 exclude 挡；②「电子行驶证」是车辆，不归本行；③「检验标志电子凭证」归车辆；④「电子驾驶证照片怎么换」归证件变更。",
+      "positive": [
+        {
+          "q": "电子驾驶证和纸质版一样吗",
+          "expect": "ANSWER:E_LICENSE"
+        },
+        {
+          "q": "电子驾照能用吗",
+          "expect": "ANSWER:E_LICENSE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "电子驾驶证申请不成功怎么办",
+          "expect_not": "ANSWER:E_LICENSE",
+          "why": "问失败原因，不是效力"
+        },
+        {
+          "q": "电子行驶证怎么领",
+          "expect_not": "ANSWER:E_LICENSE",
+          "why": "电子行驶证管车，不是驾驶证"
+        }
+      ]
     }
 
   ]

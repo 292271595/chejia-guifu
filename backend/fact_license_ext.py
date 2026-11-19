@@ -768,8 +768,38 @@ def q_apply_medical(q: str) -> Optional[Dict]:
 # ============================================================
 # 三·五、体检与身体条件证明的提交周期（第七十四条）
 # ============================================================
+def q_three_force(q: str) -> Optional[Dict]:
+    """三力测试（记忆力/判断力/反应力）本身：是什么、谁要做、怎么考。
+    换证场景的复合答案在 q_renew 的 RENEW:AGE70 里，这里只答测试本身，避免两处重复。
+    台账第 83/84 题「三力测试是啥」「三力测试怎么考」原先整类掉检索层。
+    """
+    if not re.search(r"(三力|记忆力.{0,6}判断力|判断力.{0,6}反应力|反应力.{0,6}记忆力)", q):
+        return None
+    # 「70岁能通过三力测试开大客车吗」问的是**能不能开这个车型**（年龄准驾限制，AGE_DRIVE），
+    # 不是「三力测试是什么」。带准驾/能开诉求就让位，别把年龄题抢成定义题。
+    if re.search(r"(能开|可以开|还能开|能不能开|开什么车|准驾|开大客|开货车|开摩托|开小车)", q):
+        return None
+    return result(
+        "**「三力测试」就是记忆力、判断力、反应力能力测试**，70 周岁以上办相关业务要过这一关。\n\n"
+        "**谁要做、什么时候做：**\n"
+        "· 70 周岁以上申请 C1、C2、C5、F 准驾车型的，要先通过三力测试（第十四条第二项第9目）；\n"
+        "· 70 周岁以上办理期满换证、参加审验时，也要按规定进行三力测试（第七十三条）；\n"
+        "· 63 周岁以上想继续驾驶大中型客货车的，可在年满 63 周岁前 1 年内申请，"
+        "通过三力测试后延长原准驾车型驾驶资格，延长期限最长不超过 3 年（第六十五条）。\n\n"
+        "**怎么考**：到车管所或通过「交管12123」参加测试，考的就是记忆力、判断力、反应力；"
+        "合格才能继续持有或申请相应准驾车型。**只看测试结果、不按年龄一刀切**，不通过可以补测。\n\n"
+        "⚠️ 这里不写具体题量和时长——现行法规与标准没有全国统一的「多少题、多少分钟」口径，"
+        "以当地车管所或测试系统的实际安排为准。",
+        [source(f"{LAW}第十四条第二项第9目、第六十五条、第七十三条",
+                "年龄在70周岁以上能够通过记忆力、判断力、反应力等能力测试的，可以申请小型汽车、"
+                "小型自动挡汽车、残疾人专用小型自动挡载客汽车、轻便摩托车准驾车型的机动车驾驶证")],
+        "PHYSICAL:THREE_FORCE")
+
+
 def q_physical_report(q: str) -> Optional[Dict]:
-    if not re.search(r"(体检|身体条件证明|身体检查|提交身体)", q):
+    # 「身体证明」是「身体条件证明」的口语省略（台账第 81 题「70岁每年交身体证明」
+    # 就少了「条件」二字，整句进不来）。单列出来，别再要求用户说全称。
+    if not re.search(r"(体检|身体条件证明|身体证明|身体检查|提交身体)", q):
         return None
     # "换证要不要体检"属于换证业务，交给 q_renew
     if re.search(r"换证|换领|转入", q) and not re.search(r"70|七十|C5|残疾人", q):
@@ -1481,7 +1511,8 @@ def q_exam_transfer(q: str) -> Optional[Dict]:
 
 
 def q_license_ext(question: str) -> Optional[Dict]:
-    for fn in (q_exam_local_apply, q_exam_transfer, q_recover_window, q_status_drive, q_color_weak, q_limb, q_physical_report,
+    for fn in (q_exam_local_apply, q_exam_transfer, q_recover_window, q_status_drive, q_color_weak, q_limb,
+               q_three_force, q_physical_report,
                q_internship_extra,
                q_cancel_list, q_no_ab, q_full_score, q_period, q_renew,
                q_penalty_fallback):
