@@ -16,7 +16,8 @@ from typing import Dict, List, Optional
 from fact_common import (extract_codes, covers, source, result, has, norm, cn2int,
                          LICENSE_TABLE, covers as _covers,
                          ABROAD_SELF as _ABROAD_SELF, ABROAD_EXPIRE as _ABROAD_EXPIRE,
-                         EXAM_TRANSFER_TOPIC, EXAM_TRANSFER_SCOPE, EXAM_TRANSFER_EXCLUDE)
+                         EXAM_TRANSFER_TOPIC, EXAM_TRANSFER_SCOPE, EXAM_TRANSFER_EXCLUDE,
+                         APPLY_MEDICAL_TOPIC, APPLY_MEDICAL_MED, APPLY_MEDICAL_EXCLUDE)
 
 LAW = "《机动车驾驶证申领和使用规定》（公安部令第172号）"
 LAW_SCORE = "《道路交通安全违法行为记分管理办法》（公安部令第163号）"
@@ -707,6 +708,49 @@ def q_renew(q: str) -> Optional[Dict]:
 
 
 # ============================================================
+# 三·四·五、申请/增驾阶段的体检（要不要体检、交什么证明）
+# ============================================================
+def q_apply_medical(q: str) -> Optional[Dict]:
+    """申请/增驾时要不要体检、要交什么身体证明。
+
+    与 q_physical_report（持证后的体检**周期**）分开：那是第七十四条
+    「70岁每年/C5每3年」，这是第二十三条「申请时提交身体条件证明」。
+    用户问「增驾要重新体检吗」被周期表接走、答成「70岁每年」，是台账第36题
+    记下的真实错配。判据用公共常量，调度层和这里共用一份。
+    """
+    if not re.search(APPLY_MEDICAL_MED, q):
+        return None
+    # 反向守卫优先：周期体检、期满换证体检、体检地点、单项判定、身体变化
+    if re.search(APPLY_MEDICAL_EXCLUDE, q):
+        return None
+    # 申请语境只认公共常量，不再另写一份更宽的硬编码兜底——「申请补证/护照体检」
+    # 就是被这种兜底抢的。判据单一来源，避免调度层与处理器两处漂移。
+    if not re.search(APPLY_MEDICAL_TOPIC, q):
+        return None
+    return result(
+        "**要。申请驾驶证（初次申领或增驾）都需要体检，提交医疗机构出具的身体条件证明。**\n\n"
+        "依据第二十三条：申请机动车驾驶证应当提交「（一）申请人的身份证明；"
+        "（二）医疗机构出具的有关身体条件的证明」。增驾属于申请准驾车型，同样要交。\n\n"
+        "**但很多地方不用你跑医院**：公安机关交通管理部门已与医疗机构联网核查的，"
+        "申请人**免予提交**纸质身体条件证明（第二十八条）——具体要不要自己体检、"
+        "去哪家医院，以当地车管所公示为准。\n\n"
+        "身体条件证明**自出具之日起 6 个月内有效**（第八十五条）；出具机构须是"
+        "县级、部队团级以上医疗机构，或经地市级以上卫健部门认定的二级以上医院、"
+        "乡镇卫生院、社区卫生服务中心等有健康体检资质的机构。\n\n"
+        "⚠️ 别和「持证后的体检周期」搞混：70 周岁以上每年体检、C5 每 3 年体检"
+        "（第七十四条）是拿到证之后的定期要求，不是申请/增驾这一步的体检。",
+        [source(f"{LAW}第二十三条",
+                "申请机动车驾驶证，应当确认申请信息，并提交以下证明：（一）申请人的身份证明；"
+                "（二）医疗机构出具的有关身体条件的证明"),
+         source(f"{LAW}第二十八条",
+                "公安机关交通管理部门已经实现与医疗机构等单位联网核查的，"
+                "申请人免予提交身体条件证明等证明、凭证"),
+         source(f"{LAW}第八十五条",
+                "身体条件证明自出具之日起6个月内有效")],
+        "APPLY:MEDICAL")
+
+
+# ============================================================
 # 三·五、体检与身体条件证明的提交周期（第七十四条）
 # ============================================================
 def q_physical_report(q: str) -> Optional[Dict]:
@@ -714,6 +758,11 @@ def q_physical_report(q: str) -> Optional[Dict]:
         return None
     # "换证要不要体检"属于换证业务，交给 q_renew
     if re.search(r"换证|换领|转入", q) and not re.search(r"70|七十|C5|残疾人", q):
+        return None
+    # 申请/增驾阶段的「要不要体检」不是本处理器的周期表（第二十三条/第二十八条
+    # vs 第七十四条）。命中申请语境且不带周期信号时让位给 q_apply_medical。
+    if (re.search(APPLY_MEDICAL_TOPIC, q) and re.search(APPLY_MEDICAL_MED, q)
+            and not re.search(APPLY_MEDICAL_EXCLUDE, q)):
         return None
     if re.search(r"(70|七十)", q) or "每年" in q:
         return result(

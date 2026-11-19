@@ -37,6 +37,7 @@ from fact_common import (
     ADD_RULES, NO_YEAR_ADD, extract_codes, covers, covering_codes,
     norm, has, fmt_codes, num_style, detect_aspects, source, result,
     EXAM_TRANSFER_TOPIC, BODY_CHANGE_TOPIC,
+    APPLY_MEDICAL_TOPIC, APPLY_MEDICAL_MED,
 )
 
 import fact_admin
@@ -1043,6 +1044,11 @@ _HANDLERS = [
     (q_physical,
      r"(色盲|色弱|辨色|视力|裸视|眼睛|单眼|身高|听力|耳聋|助听|上肢|下肢|手指|手掌|拇指|肢体|残疾|截肢)",
      {"QUALIFY", "VALUE"}),
+    # ── 8.5 申请/增驾阶段的体检（要不要体检/交什么证明，第二十三条/第二十八条）──
+    # 必须排在 q_physical_report（体检周期表）之前：原来只认「体检」就塞给周期表，
+    # 「增驾要重新体检吗」被答成「70岁每年/C5每3年」（台账第36题真实错配）。
+    # 判据用公共常量，与处理器共用一份。诉求门要含 QUALIFY：问「要不要」是资格诉求。
+    (ext.q_apply_medical, APPLY_MEDICAL_MED, {"QUALIFY", "PROCEDURE", "VALUE"}),
     # ── 9. 体检 / 身体条件证明提交周期 ──
     (ext.q_physical_report, r"(体检|身体条件证明|身体检查|提交身体)", {"DURATION", "PROCEDURE"}),
     # ── 10. 实习期（含标志/是否换证/高速/限制）──

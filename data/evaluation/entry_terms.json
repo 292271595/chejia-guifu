@@ -705,6 +705,25 @@
         { "q": "红绿色盲能考驾照吗", "expect": "PHYSICAL:color", "why": "问单项身体条件能否申请，不是持证后变化" },
         { "q": "得了癫痫驾照怎么处理", "expect": "DISEASE", "why": "具体疾病走第十五条不得申请，不是第六十七条变化" }
       ]
+    },
+    {
+      "term": "增驾要体检吗",
+      "handler": "q_apply_medical",
+      "added_at": "2026-11-19",
+      "why": "用户真实问答清单第36条增驾要重新体检吗：申请/增驾阶段的体检问法全被 q_physical_report（体检周期表）接走，答成「70岁每年/C5每3年」，答非所问。申请时体检依据第二十三/二十八条，与持证后周期体检（第七十四条）是两回事。新增专属处理器并抽公共常量让调度层与处理器共用，正向同义与反向守卫在此登记。",
+      "positive": [
+        { "q": "增驾要重新体检吗", "expect": "APPLY:MEDICAL" },
+        { "q": "A2增A1要体检吗", "expect": "APPLY:MEDICAL" },
+        { "q": "初次申领驾照要体检吗", "expect": "APPLY:MEDICAL" },
+        { "q": "考驾照要体检吗", "expect": "APPLY:MEDICAL" },
+        { "q": "报名要体检吗", "expect": "APPLY:MEDICAL" }
+      ],
+      "negative": [
+        { "q": "考驾照体检不合格", "expect": "PHYSICAL_REPORT:TABLE", "why": "问身体条件能否通过，是单项判定不是要不要体检" },
+        { "q": "期满换证要体检吗", "expect": "RENEW:MEDICAL", "why": "问期满换证体检，不是申请增驾体检" },
+        { "q": "70岁以上每年体检", "expect": "PHYSICAL_REPORT:70", "why": "问持证后体检周期，不是申请时体检" },
+        { "q": "体检去哪做", "expect": "PHYSICAL:WHERE", "why": "问体检机构地点，不是要不要体检" }
+      ]
     }
   ]
 }
