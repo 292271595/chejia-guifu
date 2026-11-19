@@ -758,7 +758,7 @@ def q_vehicle_reg(q: str) -> Optional[Dict]:
             "REG:INSPECT_PREP")
 
     if re.search(r"(电子(检验|年检|保险)?(标志|凭证)|检验标志|年检标志|检标志|"
-                 r"标志.{0,4}(贴|粘|挂))", q) \
+                 r"标志.{0,4}(贴|粘|挂)|贴标|标贴|粘贴标志)", q) \
             and not re.search(r"(电子(驾驶证|行驶证|驾照)|(驾驶证|行驶证)电子)", q):
         return result(
             "**检验标志电子凭证与纸质检验标志具有同等效力。**\n\n"
