@@ -355,7 +355,12 @@ def q_insurance_escape(question: str) -> Optional[Dict]:
 def q_no_self_settle(question: str) -> Optional[Dict]:
     if not re.search(r"(自行协商|协商处理|不能协商|不得协商|自行处理|快处快赔)", question):
         return None
-    if not re.search(r"(哪些|什么|不能|不得|不适用|除外|情形|情况)", question):
+    # 第二道门只认**明确的否定信号**。
+    # 原来是 (哪些|什么|不能|不得|不适用|除外|情形|情况)，只要带「哪些/什么/情形」就放行，
+    # 于是「什么事故可以自己协商处理」被接走，回了一份「不能协商」的清单——
+    # 用户问能做什么，答的是不能做什么。正面清单现在归知识点表 ACCIDENT:SELF_SETTLE，
+    # 本处理器只保留否定问法，避免同一问题两个来源将来各改一半。
+    if not re.search(r"(不能|不得|不可以|不适用|除外|禁止|不许)", question):
         return None
     return result(
         "**以下情况不能自行协商，当事人应当保护现场并立即报警。**\n\n"

@@ -1931,6 +1931,138 @@
           "why": "问期限，归 REG:TEMP_PLATE"
         }
       ]
+    },
+    {
+      "term": "事故能快处吗",
+      "handler": "q_self_settle",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 194 题「哪些事故能快处」，实测 winner=None；而「什么事故可以自己协商处理」被 ACCIDENT:NO_SETTLE 接走，答的是「哪些不能协商」——用户问能做什么，回的是不能做什么，方向反了但看着像答上了。原文齐全（道交法第七十条第二、三款，实施条例第八十六条，事故处理程序规定第十九至二十一条、第十三条）。本行 exclude 的否定词是关键让位守卫：NO_SETTLE 是手写处理器、排在表行之后，表行匹配就赢，所以「哪些情况不能自行协商」必须被挡在本行外才能回到 NO_SETTLE。影响面扫描：①「哪些情况不能自行协商处理事故」被否定词挡，仍归 NO_SETTLE（实测确认）；②「事故能线上快处吗」被 exclude 的「线上快处」挡（便民 5.1 仅 36 城试点，不能混讲）；③「高速上能停车吗」不含协商/撤离词，不命中。",
+      "positive": [
+        {
+          "q": "哪些事故能快处",
+          "expect": "ACCIDENT:SELF_SETTLE"
+        },
+        {
+          "q": "什么事故可以自己协商处理",
+          "expect": "ACCIDENT:SELF_SETTLE"
+        },
+        {
+          "q": "轻微事故能自己撤离吗",
+          "expect": "ACCIDENT:SELF_SETTLE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "哪些情况不能自行协商处理事故",
+          "expect_not": "ACCIDENT:SELF_SETTLE",
+          "why": "问不能协商的情形，归 ACCIDENT:NO_SETTLE"
+        },
+        {
+          "q": "视频快处怎么申请",
+          "expect_not": "ACCIDENT:SELF_SETTLE",
+          "why": "便民 5.1 仅 36 城试点，不属于本行的普遍口径"
+        }
+      ]
+    },
+    {
+      "term": "违章能12123处理吗",
+      "handler": "q_violation_online",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 183 题与第 185 题，两条实测都 winner=None。台账第 185 题答案「警告或200元以下、6分以下、备案后发生」只有前半句有原文（《道路交通安全违法行为处理程序规定》第五十二条）；「6 分以下」「备案后发生」全库无部令条文，属平台运营规则，按 6.3 不能写成法条。答案因此**分「法条门槛」与「平台侧条件」两段**，后者明说无部令依据、以 App 提示为准。影响面扫描：①「12123怎么备案非本人车」被 exclude 挡，归 VIOLATION:FILING_COUNT；②「事故能线上快处吗」被 exclude 挡；③「驾驶证能在12123换吗」不含违法词，不命中（实测 None）。",
+      "positive": [
+        {
+          "q": "违章能12123处理吗",
+          "expect": "VIOLATION:ONLINE"
+        },
+        {
+          "q": "12123能处理违章吗",
+          "expect": "VIOLATION:ONLINE"
+        },
+        {
+          "q": "网上能交罚款吗",
+          "expect": "VIOLATION:ONLINE"
+        },
+        {
+          "q": "非现场违法能在线上处理吗",
+          "expect": "VIOLATION:ONLINE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "能备案几辆",
+          "expect_not": "VIOLATION:ONLINE",
+          "why": "问备案数量，归 VIOLATION:FILING_COUNT"
+        },
+        {
+          "q": "驾驶证能在12123换吗",
+          "expect_not": "VIOLATION:ONLINE",
+          "why": "换证属驾驶证业务，不是违法处理"
+        }
+      ]
+    },
+    {
+      "term": "能备案几辆",
+      "handler": "q_violation_filing_count",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 188 题，用户答案「最多3辆，每天1辆、每年5次」，台账自己就标了「需另行核实」。回原文核验：全库查不到任何部令规定备案数量上限，三个数字是平台运营参数，按 6.3 绝不能当法条入库。但检索层会照帖子编「最多 3 辆」，所以做成「明说没有统一规定 + 指出网传数字无依据 + 教用户看 App 页面」，must_not 直接把这三个数字列为错误说法，将来有人写回去回归会当场拦下。影响面扫描：①「变更备案要什么材料」被 exclude 挡，仍归 REG:CHANGE（实测确认）；②「备案非本人车怎么弄」命中本行（答案第 2 节正好讲在哪办）；③「一辆车能上几个牌」不含备案/绑定词，不命中。",
+      "positive": [
+        {
+          "q": "能备案几辆",
+          "expect": "VIOLATION:FILING_COUNT"
+        },
+        {
+          "q": "非本人机动车最多备案几辆",
+          "expect": "VIOLATION:FILING_COUNT"
+        },
+        {
+          "q": "12123能绑定几辆车",
+          "expect": "VIOLATION:FILING_COUNT"
+        }
+      ],
+      "negative": [
+        {
+          "q": "变更备案要什么材料",
+          "expect_not": "VIOLATION:FILING_COUNT",
+          "why": "车辆变更备案，归 REG:CHANGE"
+        },
+        {
+          "q": "违章能12123处理吗",
+          "expect_not": "VIOLATION:FILING_COUNT",
+          "why": "问违法处理，归 VIOLATION:ONLINE"
+        }
+      ]
+    },
+    {
+      "term": "挪车注意啥",
+      "handler": "q_move_car",
+      "added_at": "2026-11-19",
+      "why": "200 条清单第 192 题，用户答案「实名、拍清号牌、10分钟可催单」。回原文核验：**全库没有「挪车」二字**，没有任何法规规定挪车流程、响应时限、催单规则，这三个细节全部无依据；但检索层会照帖子编「10 分钟可催单」，所以做成「明说全国无统一规则 + 三条可行途径 + 红线别自己动手」的直答。红线部分有真原文支撑：道交法第九十三条（交警可拖移、拖车不得收费、拖坏要补偿），这才是被堵了的正解——报警让交警拖，别自己动手。影响面扫描：①「违停怎么罚」被 exclude 的「罚款|处罚标准」挡；②「拖车费谁出」被 exclude 的「拖车费」挡；③「被堵住出不去」命中本行（正是要解决的场景）。",
+      "positive": [
+        {
+          "q": "挪车注意啥",
+          "expect": "MOVE:CAR"
+        },
+        {
+          "q": "一键挪车怎么用",
+          "expect": "MOVE:CAR"
+        },
+        {
+          "q": "车被堵住了怎么办",
+          "expect": "MOVE:CAR"
+        }
+      ],
+      "negative": [
+        {
+          "q": "违停怎么罚",
+          "expect_not": "MOVE:CAR",
+          "why": "问违停处罚标准，不是挪车流程"
+        },
+        {
+          "q": "拖车费谁出",
+          "expect_not": "MOVE:CAR",
+          "why": "问费用承担，不是怎么挪"
+        }
+      ]
     }
 
 
