@@ -468,6 +468,23 @@ AB类驾驶证(A1/A2/A3/B1/B2)审验：记分周期结束后30日内审验，无
         except Exception as e:
             print(f"[RAGEngine] 事实表查询异常，回退 RAG: {e}")
 
+        # ─── 防线零A：答案库语义召回（口语变体，守卫裁决，零幻觉）───
+        # 事实层正则接不住的变体（"想报个驾照得准备什么材料"），过去直接掉生成层
+        # 由模型自由发挥。答案库把表行 verify.questions 当种子做向量召回，再用表行
+        # 自带的 require/exclude 守卫复核用户问句——过守卫才吐表行审定答案。
+        # 相似度只做召回不做裁决：实测同义变体 0.82~0.92、答案相反的危险对 0.85，
+        # 区间重叠，阈值分不开（2026-11-19 实验）。种子即表行：加表行=扩库，零维护。
+        if not fact:
+            try:
+                import answer_bank
+                fn = getattr(getattr(self, "vector_store", None), "embedding_fn", None)
+                fact = answer_bank.lookup(effective_q, embedding_fn=fn)
+                if fact:
+                    print(f"[RAGEngine] 答案库命中 {fact.get('fact')} "
+                          f"sim={fact.get('ab_sim')}，进入复核")
+            except Exception as e:
+                print(f"[RAGEngine] 答案库查询异常（忽略，走 RAG）: {e}")
+
         if fact:
             print(f"[RAGEngine] 事实表命中 {fact.get('fact')}，进入复核")
             # 事实层答案的数字是代码里写死的常量，理论上不会错，但模板拼接多了

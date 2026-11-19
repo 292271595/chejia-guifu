@@ -38,3 +38,6 @@ tools/_web100_run.log
 # 系统
 .DS_Store
 Thumbs.db
+
+# 答案库向量缓存：随种子/嵌入后端指纹重建，二进制不入库
+data/knowledge_table/answer_bank_cache.npz
