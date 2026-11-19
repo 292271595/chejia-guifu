@@ -20,7 +20,8 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 from fact_common import (extract_codes, covers, source, result,
-                         LICENSE_TABLE)
+                         LICENSE_TABLE,
+                         EXAM_TRANSFER_TOPIC, EXAM_TRANSFER_SCOPE, EXAM_TRANSFER_EXCLUDE)
 
 LAW = "《机动车驾驶证申领和使用规定》（公安部令第172号）"
 SRC = "driving_exam.md"
@@ -278,6 +279,12 @@ def q_exam(question: str) -> Optional[Dict]:
     # 入口先做科目别名归一：此后所有分支里 q 的「科目四」都已是「安全文明」，
     # 不必每个分支各写一遍别名判断（漏写就是静默答错一科，见 norm_subject 注释）。
     q = norm_subject(question)
+    # 2026-11-19：「变更考试地最多能变几次」含「最多 N 次」，会被下面次数分支抢答成
+    # 科目二三的 5 次预约上限（第四十七条），而正确答案是第三十九条「变更不超过 3 次」。
+    # 变更考试地有专属处理器，这里必须让位；两处判据共用公共常量，避免漂移。
+    if (re.search(EXAM_TRANSFER_TOPIC, q) and re.search(EXAM_TRANSFER_SCOPE, q)
+            and not re.search(EXAM_TRANSFER_EXCLUDE, q)):
+        return None
     # 资格状态语境下「考几科」不是"增驾考哪几科"，而是"注销/吊销/超期后重新申领要考哪几科"。
     # 那两个处理器排在考试处理器后面，不在这里让位就会被 EXAM:COUNT / EXAM:BASIC 抢答：
     # 「驾驶证注销三年了，重新申领要考几科」实测答成增驾科目表。

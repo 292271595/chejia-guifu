@@ -15,7 +15,8 @@ from typing import Dict, List, Optional
 
 from fact_common import (extract_codes, covers, source, result, has, norm, cn2int,
                          LICENSE_TABLE, covers as _covers,
-                         ABROAD_SELF as _ABROAD_SELF, ABROAD_EXPIRE as _ABROAD_EXPIRE)
+                         ABROAD_SELF as _ABROAD_SELF, ABROAD_EXPIRE as _ABROAD_EXPIRE,
+                         EXAM_TRANSFER_TOPIC, EXAM_TRANSFER_SCOPE, EXAM_TRANSFER_EXCLUDE)
 
 LAW = "《机动车驾驶证申领和使用规定》（公安部令第172号）"
 LAW_SCORE = "《道路交通安全违法行为记分管理办法》（公安部令第163号）"
@@ -1358,9 +1359,14 @@ def q_exam_transfer(q: str) -> Optional[Dict]:
     模型据此拼出"申请转入考试、提交驾驶证明"——条号真实、条文不搭。
     这类"考到一半换城市"的问题答案唯一，不该让模型从一堆相邻条文里挑。
     """
-    if not re.search(r"(考试地|换.{0,5}城市|(别的|其他|另一个|外).{0,5}(城市|地方|省)|去外地)", q):
+    # 主题/诉求两道判据与调度层共用同一份常量，避免「改了处理器忘了调度」的漂移。
+    # 2026-11-19 补：原第二道守卫只认「科目|考试」，漏掉「科一/科二」「考了一半」
+    # 这些真实口语（「C2过了科一要去外地怎么办」整句掉 RAG）。
+    if re.search(EXAM_TRANSFER_EXCLUDE, q):
         return None
-    if not re.search(r"(科目|考试|驾考|考到|考过|考证)", q):
+    if not re.search(EXAM_TRANSFER_TOPIC, q):
+        return None
+    if not re.search(EXAM_TRANSFER_SCOPE, q):
         return None
     return result(
         "**可以申请「变更考试地」，考过的科目继续有效，不用重考。**\n\n"

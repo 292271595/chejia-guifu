@@ -669,6 +669,24 @@
           "why": "问换证，不是考试预约"
         }
       ]
+    },
+    {
+      "term": "变更考试地",
+      "handler": "q_exam_transfer",
+      "added_at": "2026-11-19",
+      "why": "用户真实问答清单第29/30/31条：考到一半换城市、变更考试地次数、能否转回。第三十九条第三款有确定答案（不得超3次），但原调度 cov 缺 VALUE/DURATION、处理器不认科一口语、还被 q_exam 的「最多N次」抢答成科目二三5次。三处机制已整类修；入口词与正向同义、反向守卫在此登记，防再次漂移。",
+      "positive": [
+        { "q": "变更考试地最多能变几次", "expect": "EXAM:TRANSFER" },
+        { "q": "考试地变更次数上限是多少", "expect": "EXAM:TRANSFER" },
+        { "q": "C2过了科一要去外地怎么办", "expect": "EXAM:TRANSFER" },
+        { "q": "外地考了一半能转回来继续考吗", "expect": "EXAM:TRANSFER" }
+      ],
+      "negative": [
+        { "q": "科目二预约最多几次", "expect": "EXAM:TIMES", "why": "问科目二三的预约上限，不是变更考试地次数" },
+        { "q": "科目一能考几次", "expect": "EXAM:TIMES_K1", "why": "科目一无次数上限，不能被 3 次抢" },
+        { "q": "异地考驾照要居住证吗", "expect": "APPLY:MATERIAL", "why": "问报名材料，不是变更考试地" },
+        { "q": "驾驶证转到别的城市换证怎么办", "expect_not": "EXAM:TRANSFER", "why": "问换证，不是考试地变更" }
+      ]
     }
   ]
 }

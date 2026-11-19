@@ -36,6 +36,7 @@ from fact_common import (
     AGE_RULES, AGE_SPECIAL, FORBIDDEN_AT_63, FORBIDDEN_AT_70, DOWNGRADE_RULES,
     ADD_RULES, NO_YEAR_ADD, extract_codes, covers, covering_codes,
     norm, has, fmt_codes, num_style, detect_aspects, source, result,
+    EXAM_TRANSFER_TOPIC,
 )
 
 import fact_admin
@@ -1170,8 +1171,12 @@ _HANDLERS = [
      r"|[0-9一二两三四五六七八九十]+\s*年\s*(?:多|了)?\s*(?:没|未)\s*(?:换|续))",
      {"DURATION", "VALIDITY", "PROCEDURE", "QUALIFY", "PENALTY", "SUBJECT"}),
     # ── 考到一半换城市（第三十九条第三款）──
-    (ext.q_exam_transfer, r"(考试地|换.{0,5}城市|(别的|其他|另一个).{0,5}(城市|地方|省)|去外地)",
-     {"PROCEDURE", "SUBJECT"}),
+    # 2026-11-19：主题正则改吃公共常量（与处理器同一份），cov 补 VALUE/DURATION——
+    # 「变更考试地能几次」「考试地变更次数上限」问的是次数/上限，旧 cov 只有
+    # PROCEDURE/SUBJECT，在诉求闸门就被挡掉；「变更考试地最多能变几次」还被
+    # q_exam 的「最多 N 次」分支抢答成科目二三的 5 次，需在 q_exam 入口让位。
+    (ext.q_exam_transfer, EXAM_TRANSFER_TOPIC,
+     {"PROCEDURE", "SUBJECT", "VALUE", "DURATION", "QUALIFY"}),
     # ── 16. 70 周岁以上可申请车型（必须早于年龄驾驶限制）──
     (q_age70_apply, r"70\s*(?:周?岁)", QUALIFY | {"VALUE", "PROCEDURE"}),
     # ── 17. 年龄驾驶限制 ──
