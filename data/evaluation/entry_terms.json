@@ -263,6 +263,70 @@
           "why": "金标准G01抓到的抢答：问句里的「需要」曾被误判为材料诉求，报名材料行抢走年龄问句"
         }
       ]
+    },
+    {
+      "term": "体检去做",
+      "handler": "table_physical_where",
+      "added_at": "2026-11-19",
+      "why": "线上错答：用户问「体检去做」（体检去哪做），事实层无处理器认领地点诉求，宽泛的「体检」主题词被 q_physical_report 接走答成体检周期，对象复核判错后退回检索原文又错召到「增驾路径汇总表」。第八十五条、便民2.17 本有确定答案。本入口词接住「体检/身体条件证明+去哪/哪家医院/什么机构」整类，守卫周期、换证要不要、色盲身体条件、报名材料。",
+      "positive": [
+        {
+          "q": "体检去做",
+          "expect": "PHYSICAL:WHERE"
+        },
+        {
+          "q": "体检去哪做",
+          "expect": "PHYSICAL:WHERE"
+        },
+        {
+          "q": "驾驶员体检去哪里做",
+          "expect": "PHYSICAL:WHERE"
+        },
+        {
+          "q": "考驾照体检去哪家医院",
+          "expect": "PHYSICAL:WHERE"
+        },
+        {
+          "q": "哪些医院可以做驾驶员体检",
+          "expect": "PHYSICAL:WHERE"
+        },
+        {
+          "q": "在哪里可以体检",
+          "expect": "PHYSICAL:WHERE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "70岁以上每年体检吗",
+          "expect": "PHYSICAL_REPORT:70",
+          "why": "问体检周期，归周期处理器，不是地点"
+        },
+        {
+          "q": "70岁以上驾驶人每年要提交体检证明吗",
+          "expect": "PHYSICAL_REPORT:70",
+          "why": "金标准C10，冻结回归，不能被地点行抢走"
+        },
+        {
+          "q": "C5几年体检一次",
+          "expect": "PHYSICAL_REPORT:C5",
+          "why": "C5体检周期，归周期处理器"
+        },
+        {
+          "q": "换证要不要体检",
+          "expect": "RENEW:MEDICAL",
+          "why": "问是否需要体检，归换证处理器"
+        },
+        {
+          "q": "色盲能考驾照吗",
+          "expect_not": "PHYSICAL:WHERE",
+          "why": "身体条件准入，归色盲处理器，不是体检地点"
+        },
+        {
+          "q": "体检要带什么",
+          "expect_not": "PHYSICAL:WHERE",
+          "why": "问材料，不是去哪做体检"
+        }
+      ]
     }
   ]
 }
