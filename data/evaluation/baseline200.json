@@ -1,0 +1,2002 @@
+[
+ {
+  "idx": 1,
+  "q": "多大年龄能考驾照",
+  "user": "小型车满18周岁，大车要求更高（20–22周岁起）。",
+  "base_hit": "AGE:APPLY_ALL",
+  "cat": "已有",
+  "now_hit": "AGE:APPLY_ALL",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 2,
+  "q": "报名要带什么",
+  "user": "身份证、体检证明、照片；增驾再带原驾驶证。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "APPLY:MATERIAL",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 3,
+  "q": "C1和C2考哪个",
+  "user": "C1能开手动+自动，C2只能自动，C2更好考。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "ANSWER:C1_C2_COMPARE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 4,
+  "q": "体检去哪做",
+  "user": "联网医院或车管所自助体检机。",
+  "base_hit": "PHYSICAL:WHERE",
+  "cat": "已有",
+  "now_hit": "PHYSICAL:WHERE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 5,
+  "q": "科目一怎么约考",
+  "user": "交管12123上预约。",
+  "base_hit": "EXAM:YUEKAO_GAP",
+  "cat": "已有",
+  "now_hit": "EXAM:YUEKAO_GAP",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 6,
+  "q": "科一多少分及格",
+  "user": "90分合格。",
+  "base_hit": "EXAM:PASS_S1",
+  "cat": "已有",
+  "now_hit": "EXAM:PASS_S1",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 7,
+  "q": "科一没过能补考吗",
+  "user": "当天可补考一次。",
+  "base_hit": "EXAM:TIMES_K1",
+  "cat": "硬伤",
+  "now_hit": "EXAM:TIMES_K1",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 8,
+  "q": "科二考哪些",
+  "user": "倒车入库、侧方停车、坡道定点、直角转弯、曲线行驶。",
+  "base_hit": "EXAM:S2_CONTENT",
+  "cat": "已有",
+  "now_hit": "EXAM:S2_CONTENT",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 9,
+  "q": "科二能取消预约吗",
+  "user": "提前一天可取消。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "EXAM:CANCEL",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 10,
+  "q": "科二没过多久再约",
+  "user": "10天后。",
+  "base_hit": "EXAM:TIMES",
+  "cat": "已有",
+  "now_hit": "EXAM:TIMES",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 11,
+  "q": "科三考什么",
+  "user": "实际道路驾驶技能。",
+  "base_hit": "EXAM:S3_CONTENT",
+  "cat": "已有",
+  "now_hit": "EXAM:S3_CONTENT",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 12,
+  "q": "安全文明驾驶是科四吗",
+  "user": "是，和科三分开考。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "EXAM:S4_CONTENT",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 13,
+  "q": "每科能考几次",
+  "user": "当天可补考一次；科二、科三预约各不超5次。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 14,
+  "q": "学习驾驶证明有效期",
+  "user": "3年。",
+  "base_hit": "STUDY_CERT",
+  "cat": "已有",
+  "now_hit": "STUDY_CERT",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 15,
+  "q": "约了考试没空去",
+  "user": "提前一天取消。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "EXAM:CANCEL",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 16,
+  "q": "取消要提前多久",
+  "user": "至少提前一天。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "EXAM:CANCEL",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 17,
+  "q": "约了不去算什么",
+  "user": "算本次考试不合格。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "EXAM:CANCEL",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 18,
+  "q": "驾校能退费吗",
+  "user": "按合同和进度协商。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 19,
+  "q": "考试费怎么交",
+  "user": "12123或驾校代缴。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 20,
+  "q": "外地能考驾照吗",
+  "user": "能，凭身份证全国通考。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "APPLY:MATERIAL:LOCAL",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 21,
+  "q": "C1能增驾摩托吗",
+  "user": "能，但要过实习期。",
+  "base_hit": "ADD:MOTO",
+  "cat": "硬伤",
+  "now_hit": "ADD:MOTO",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 22,
+  "q": "实习期能增驾吗",
+  "user": "不能。",
+  "base_hit": "INTERNSHIP:ADD",
+  "cat": "已有",
+  "now_hit": "INTERNSHIP:ADD",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 23,
+  "q": "增驾要重考科一吗",
+  "user": "一般要考科一和相应科目。",
+  "base_hit": "EXAM:TIMES_K1",
+  "cat": "已有",
+  "now_hit": "EXAM:TIMES_K1",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 24,
+  "q": "C1满三年能增B1吗",
+  "user": "满2年且连续2个记分周期无满分记录。",
+  "base_hit": "RAG(漏)",
+  "cat": "硬伤",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 25,
+  "q": "增驾后有效期变吗",
+  "user": "不变，记分周期按初次领证算。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "ANSWER:ADD_VALIDITY",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 26,
+  "q": "A1能降成C1吗",
+  "user": "带身份证、驾驶证、照片去窗口降级换证。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": "DOWNGRADE:VOLUNTARY",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 27,
+  "q": "自愿降级怎么办",
+  "user": "不用体检，窗口申请。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": "DOWNGRADE:VOLUNTARY",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 28,
+  "q": "超龄降级怎么办",
+  "user": "要先体检。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "DOWNGRADE:AGE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 29,
+  "q": "C2过了科一要去外地",
+  "user": "申请变更考试地。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "EXAM:TRANSFER",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 30,
+  "q": "变更考试地能几次",
+  "user": "最多3次。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "EXAM:TRANSFER",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 31,
+  "q": "外地考了一半能转回吗",
+  "user": "能，变更考试地继续考。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "EXAM:TRANSFER",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 32,
+  "q": "增驾大车啥条件",
+  "user": "年龄、驾龄、无满分记录，具体问当地。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 33,
+  "q": "C1增驾摩托哪个车型",
+  "user": "D、E、F。",
+  "base_hit": "ADD:MOTO",
+  "cat": "已有",
+  "now_hit": "ADD:MOTO",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 34,
+  "q": "增驾期间扣分影响吗",
+  "user": "申请前记分周期不能有满分记录。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "ADD:SCORE_IMPACT",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 35,
+  "q": "想升A1要啥条件",
+  "user": "满足相应准驾年限和记分要求。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "ADD:A1",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 36,
+  "q": "增驾要重新体检吗",
+  "user": "要。",
+  "base_hit": "PHYSICAL_REPORT:TABLE",
+  "cat": "硬伤",
+  "now_hit": "APPLY:MEDICAL",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 37,
+  "q": "驾驶证到期怎么换",
+  "user": "到期前90日内申请，带身份证、驾驶证、体检证明。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "RENEW:BEFORE_90",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 38,
+  "q": "提前多久能换",
+  "user": "到期前90天内。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 39,
+  "q": "换证要体检吗",
+  "user": "要，联网医院出证明。",
+  "base_hit": "RENEW:MEDICAL",
+  "cat": "已有",
+  "now_hit": "RENEW:MEDICAL",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 40,
+  "q": "异地能换吗",
+  "user": "能，核发地或外地车管都行。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "RENEW:CROSS_REGION",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 41,
+  "q": "证丢了怎么补",
+  "user": "12123或窗口办遗失补证。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": "REG:REISSUE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 42,
+  "q": "证损坏了怎么换",
+  "user": "办损毁换证。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 43,
+  "q": "补证要回原籍吗",
+  "user": "不用，异地可补。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:REISSUE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 44,
+  "q": "补了新证旧证还能用吗",
+  "user": "作废，不能再用。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:REISSUE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 45,
+  "q": "换证能网上办吗",
+  "user": "能，12123。",
+  "base_hit": "RENEW:BEFORE_90",
+  "cat": "已有",
+  "now_hit": "RENEW:BEFORE_90",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 46,
+  "q": "警医邮网点能办吗",
+  "user": "能。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "EDGE:POST_OFFICE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 47,
+  "q": "外地证转回本地",
+  "user": "12123或窗口办转入。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 48,
+  "q": "转入和期满换证一起",
+  "user": "能合并办。",
+  "base_hit": "RENEW:TRANSFER",
+  "cat": "已有",
+  "now_hit": "RENEW:TRANSFER",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 49,
+  "q": "没到期能转入吗",
+  "user": "能。",
+  "base_hit": "RENEW:TRANSFER",
+  "cat": "已有",
+  "now_hit": "RENEW:TRANSFER",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 50,
+  "q": "转入要体检吗",
+  "user": "未期满一般不用。",
+  "base_hit": "RENEW:TRANSFER",
+  "cat": "已有",
+  "now_hit": "RENEW:TRANSFER",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 51,
+  "q": "换证照片啥要求",
+  "user": "1寸白底免冠近期彩照。",
+  "base_hit": "RENEW:BEFORE_90",
+  "cat": "已有",
+  "now_hit": "RENEW:BEFORE_90",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 52,
+  "q": "换证多少钱",
+  "user": "工本费约10元。",
+  "base_hit": "RENEW:BEFORE_90",
+  "cat": "已有",
+  "now_hit": "RENEW:BEFORE_90",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 53,
+  "q": "照片能自己传吗",
+  "user": "按系统提示操作。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 54,
+  "q": "70岁以上换证",
+  "user": "要先过\"三力测试\"。",
+  "base_hit": "RENEW:AGE70",
+  "cat": "已有",
+  "now_hit": "RENEW:AGE70",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 55,
+  "q": "什么是审验",
+  "user": "定期到交管部门接受检查和学习。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REVIEW:BASICS",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 56,
+  "q": "哪些人要审验",
+  "user": "A/B证有记分的、校车、事故致死担责的。",
+  "base_hit": "REVIEW:LIST",
+  "cat": "已有",
+  "now_hit": "REVIEW:LIST",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 57,
+  "q": "A/B没扣分要审验吗",
+  "user": "不用，免审。",
+  "base_hit": "EDGE:REVIEW_NO_POINT",
+  "cat": "已有",
+  "now_hit": "EDGE:REVIEW_NO_POINT",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 58,
+  "q": "审验学多久",
+  "user": "不少于3小时。",
+  "base_hit": "REVIEW:EDU",
+  "cat": "已有",
+  "now_hit": "REVIEW:EDU",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 59,
+  "q": "审验能网上学吗",
+  "user": "1–8分可在12123学。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 60,
+  "q": "扣几分必须现场学",
+  "user": "9–11分须现场。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 61,
+  "q": "记分周期多久",
+  "user": "12个月，从初次领证日起算。",
+  "base_hit": "PERIOD",
+  "cat": "已有",
+  "now_hit": "PERIOD",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 62,
+  "q": "记满12分怎么办",
+  "user": "参加满分学习考试。",
+  "base_hit": "FULL_SCORE",
+  "cat": "已有",
+  "now_hit": "FULL_SCORE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 63,
+  "q": "满分学几天",
+  "user": "7天（大车A/B为30天）。",
+  "base_hit": "FULL_SCORE",
+  "cat": "已有",
+  "now_hit": "FULL_SCORE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 64,
+  "q": "满分考什么",
+  "user": "科目一。",
+  "base_hit": "FULL_SCORE",
+  "cat": "已有",
+  "now_hit": "FULL_SCORE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 65,
+  "q": "实习期记满12分",
+  "user": "注销实习准驾车型。",
+  "base_hit": "EDGE:INTERN_FULL12",
+  "cat": "已有",
+  "now_hit": "EDGE:INTERN_FULL12",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 66,
+  "q": "学法减分是啥",
+  "user": "学习考试把已扣的分补回来。",
+  "base_hit": "SCORE:STUDY_REDUCE",
+  "cat": "已有",
+  "now_hit": "SCORE:STUDY_REDUCE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 67,
+  "q": "能减多少",
+  "user": "一个周期最多6分。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "SCORE:STUDY_REDUCE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 68,
+  "q": "怎么操作",
+  "user": "12123申请网上学习考试。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 69,
+  "q": "满分了还能减吗",
+  "user": "不能，直接满分学习。",
+  "base_hit": "FULL_SCORE",
+  "cat": "已有",
+  "now_hit": "FULL_SCORE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 70,
+  "q": "哪些情况不能减",
+  "user": "满分、实习期、暂扣期、有未处理违法等。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "SCORE:STUDY_REDUCE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 71,
+  "q": "减分考几道题",
+  "user": "20道，答对18道合格。",
+  "base_hit": "SCORE:STUDY_REDUCE",
+  "cat": "已有",
+  "now_hit": "SCORE:STUDY_REDUCE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 72,
+  "q": "会人脸识别吗",
+  "user": "会，随机抓拍防替考。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 73,
+  "q": "审验前要处理违章吗",
+  "user": "要。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REVIEW:BEFORE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 74,
+  "q": "C1扣分要学习吗",
+  "user": "一般不审验，除非事故致死担责。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REVIEW:NONAB",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 75,
+  "q": "过期一年多还能换吗",
+  "user": "考科一恢复。",
+  "base_hit": "RENEW:OVERDUE_1_3",
+  "cat": "已有",
+  "now_hit": "RENEW:OVERDUE_1_3",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 76,
+  "q": "过期两年",
+  "user": "1–3年内考科一可恢复。",
+  "base_hit": "RENEW:OVERDUE_1_3",
+  "cat": "硬伤",
+  "now_hit": "RENEW:OVERDUE_1_3",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 77,
+  "q": "过期超三年",
+  "user": "注销，得重新考。",
+  "base_hit": "RENEW:OVERDUE_GE3",
+  "cat": "已有",
+  "now_hit": "RENEW:OVERDUE_GE3",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 78,
+  "q": "什么是\"锁定\"",
+  "user": "有未处理事项导致暂不能用。",
+  "base_hit": "LOCKED",
+  "cat": "已有",
+  "now_hit": "LOCKED",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 79,
+  "q": "注销和吊销区别",
+  "user": "注销可重考，吊销是处罚、有年限限制。",
+  "base_hit": "REVOKE:TABLE",
+  "cat": "已有",
+  "now_hit": "REVOKE:TABLE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 80,
+  "q": "身体不适合开车",
+  "user": "30日内申请注销。",
+  "base_hit": "BODY_CHANGE",
+  "cat": "硬伤",
+  "now_hit": "BODY_CHANGE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 81,
+  "q": "70岁每年交身体证明",
+  "user": "按规定须提交身体条件证明。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "PHYSICAL_REPORT:70",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 82,
+  "q": "70岁能考小车吗",
+  "user": "能，先过三力测试。",
+  "base_hit": "AGE70_APPLY",
+  "cat": "已有",
+  "now_hit": "AGE70_APPLY",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 83,
+  "q": "三力测试是啥",
+  "user": "记忆力、判断力、反应力测试。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "PHYSICAL:THREE_FORCE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 84,
+  "q": "三力测试怎么考",
+  "user": "20题、20分钟、90分合格。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "PHYSICAL:THREE_FORCE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 85,
+  "q": "出国/服兵役换证",
+  "user": "可申请延期。",
+  "base_hit": "RENEW:BEFORE_90",
+  "cat": "已有",
+  "now_hit": "RENEW:BEFORE_90",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 86,
+  "q": "能延期多久",
+  "user": "最长3年。",
+  "base_hit": "RENEW:DELAY_TWO",
+  "cat": "已有",
+  "now_hit": "RENEW:DELAY_TWO",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 87,
+  "q": "电子驾驶证怎么申请",
+  "user": "12123申领。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 88,
+  "q": "和纸质版一样吗",
+  "user": "有同等效力。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 89,
+  "q": "军人驾驶证怎么换",
+  "user": "按当地规定办理。",
+  "base_hit": "FOREIGN:MILITARY",
+  "cat": "已有",
+  "now_hit": "ID:PROOF",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 90,
+  "q": "扣留期间能补证吗",
+  "user": "不能。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:REISSUE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 91,
+  "q": "新车怎么上牌",
+  "user": "向住所地车管所申请注册登记。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:NEW_CAR",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 92,
+  "q": "带什么材料",
+  "user": "身份证、发票、合格证、交强险、购置税。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 93,
+  "q": "上牌多少钱",
+  "user": "号牌100元、行驶证10元、登记证10元。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:FEE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 94,
+  "q": "网上能办吗",
+  "user": "能，12123新车上牌\"一件事\"。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 95,
+  "q": "\"一件事\"是啥",
+  "user": "网上一次办结上牌。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:ONE_THING",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 96,
+  "q": "要开车去车管所吗",
+  "user": "预查验的不用，未预查验要验车。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 97,
+  "q": "预查验是啥",
+  "user": "出厂前已查验，免到场验车。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:PRECHECK",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 98,
+  "q": "车牌号怎么选",
+  "user": "网上50选1或自编，现场50选1。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 99,
+  "q": "网上几次机会",
+  "user": "随机50选1、自编50次。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 100,
+  "q": "选号后不去上牌",
+  "user": "弃号两年内禁止网上选号。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:ONLINE_PICK",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 101,
+  "q": "能用老号牌吗",
+  "user": "符合条件可以。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:KEEP_PLATE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 102,
+  "q": "保留原号条件",
+  "user": "用满一年，注销/转让后保留两年。",
+  "base_hit": "REG:KEEP_PLATE",
+  "cat": "已有",
+  "now_hit": "REG:KEEP_PLATE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 103,
+  "q": "没上牌能办临牌吗",
+  "user": "能。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:TEMP_PLATE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 104,
+  "q": "临牌能办几次",
+  "user": "最多3次。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:TEMP_PLATE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 105,
+  "q": "分期车能网上上牌吗",
+  "user": "能，可合并办抵押。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:NEW_CAR",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 106,
+  "q": "上牌能代办吗",
+  "user": "能，用电子委托。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": "AGENT:ENTRUST",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 107,
+  "q": "电子行驶证单独申请",
+  "user": "上牌时勾选合并申领即可。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "ANSWER:E_VEHICLE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 108,
+  "q": "单位车怎么上牌",
+  "user": "单位版12123或窗口。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 109,
+  "q": "二手车怎么过户",
+  "user": "交易市场开票，车管所查验办转让登记。",
+  "base_hit": "VEHICLE:TRANSFER",
+  "cat": "已有",
+  "now_hit": "VEHICLE:TRANSFER",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 110,
+  "q": "带什么材料",
+  "user": "身份证、发票、登记证、行驶证。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 111,
+  "q": "过户前要处理违章吗",
+  "user": "要。",
+  "base_hit": "VEHICLE:TRANSFER",
+  "cat": "已有",
+  "now_hit": "VEHICLE:TRANSFER",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 112,
+  "q": "要开车去吗",
+  "user": "要，需查验车辆。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 113,
+  "q": "外地买车本地上牌",
+  "user": "可办转籍/转入。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:BUY_ELSEWHERE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 114,
+  "q": "什么是转籍",
+  "user": "车辆档案从一地转到另一地。",
+  "base_hit": "VEHICLE:RELOCATE",
+  "cat": "已有",
+  "now_hit": "VEHICLE:RELOCATE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 115,
+  "q": "转入要什么",
+  "user": "身份证、登记证、交验车。",
+  "base_hit": "RENEW:TRANSFER",
+  "cat": "已有",
+  "now_hit": "RENEW:TRANSFER",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 116,
+  "q": "夫妻的车能换牌吗",
+  "user": "要符合同一所有人等条件，不能直接换。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 117,
+  "q": "名下两车能互换号牌吗",
+  "user": "同一所有人、同辖区、同号牌种类、非营运。",
+  "base_hit": "REG:PLATE_SWAP",
+  "cat": "已有",
+  "now_hit": "REG:PLATE_SWAP",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 118,
+  "q": "互换啥条件",
+  "user": "同上。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 119,
+  "q": "互换后多久能再换",
+  "user": "一年一次。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 120,
+  "q": "过户后原号能留吗",
+  "user": "原车主符合条件可保留。",
+  "base_hit": "VEHICLE:TRANSFER",
+  "cat": "已有",
+  "now_hit": "VEHICLE:TRANSFER",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 121,
+  "q": "登记证丢了能过户吗",
+  "user": "先补领。",
+  "base_hit": "VEHICLE:TRANSFER",
+  "cat": "已有",
+  "now_hit": "VEHICLE:TRANSFER",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 122,
+  "q": "二手车发票怎么开",
+  "user": "交易市场开具。",
+  "base_hit": "VEHICLE:TRANSFER",
+  "cat": "已有",
+  "now_hit": "VEHICLE:TRANSFER",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 123,
+  "q": "抵押车能过户吗",
+  "user": "原车主、现车主、抵押权人共同申请。",
+  "base_hit": "VEHICLE:TRANSFER_MORTGAGE",
+  "cat": "已有",
+  "now_hit": "VEHICLE:TRANSFER_MORTGAGE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 124,
+  "q": "过户多久办完",
+  "user": "受理后1日内。",
+  "base_hit": "VEHICLE:TRANSFER",
+  "cat": "已有",
+  "now_hit": "VEHICLE:TRANSFER",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 125,
+  "q": "改色要备案吗",
+  "user": "要。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:CHANGE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 126,
+  "q": "改色后多久备案",
+  "user": "变更后10日内。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:CHANGE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 127,
+  "q": "换发动机办啥",
+  "user": "申请变更登记。",
+  "base_hit": "REG:CHANGE",
+  "cat": "已有",
+  "now_hit": "REG:CHANGE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 128,
+  "q": "换车身车架",
+  "user": "要备案。",
+  "base_hit": "REG:CHANGE",
+  "cat": "已有",
+  "now_hit": "REG:CHANGE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 129,
+  "q": "使用性质变了",
+  "user": "办变更登记。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:USE_NATURE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 130,
+  "q": "搬家了联系方式要改吗",
+  "user": "30日内变更备案。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:FILING",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 131,
+  "q": "怎么改联系方式",
+  "user": "12123或窗口。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 132,
+  "q": "装行李架合规吗",
+  "user": "不超车身，货物距车顶不超0.5米。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "VEHICLE:MOD_LEGAL",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 133,
+  "q": "货车能装尾板吗",
+  "user": "允许，可跨省通办。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:FILING",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 134,
+  "q": "残疾人辅助装置能装吗",
+  "user": "允许加装。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:FILING",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 135,
+  "q": "改装被罚还能备案",
+  "user": "先处理，符合规定才可。",
+  "base_hit": "REG:CHANGE",
+  "cat": "已有",
+  "now_hit": "REG:CHANGE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 136,
+  "q": "变更能跨省办吗",
+  "user": "部分项目可跨省通办。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 137,
+  "q": "变更要开车去吗",
+  "user": "一般要查验。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 138,
+  "q": "单位车变更所有人",
+  "user": "窗口或单位版办理。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 139,
+  "q": "私家车多久年检",
+  "user": "10年内第6、第10年上线；10年以上每年。",
+  "base_hit": "VEHICLE:CYCLE",
+  "cat": "已有",
+  "now_hit": "VEHICLE:CYCLE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 140,
+  "q": "新车6年内上线吗",
+  "user": "不用，每两年领标。",
+  "base_hit": "VEHICLE:CYCLE",
+  "cat": "已有",
+  "now_hit": "VEHICLE:CYCLE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 141,
+  "q": "6–10年怎么检",
+  "user": "第6、10年上线，其余两年领标。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 142,
+  "q": "10年以上",
+  "user": "每年检验。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 143,
+  "q": "免检车怎么领标",
+  "user": "12123申领检验标志。",
+  "base_hit": "VEHICLE:EXEMPT",
+  "cat": "已有",
+  "now_hit": "VEHICLE:EXEMPT",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 144,
+  "q": "免检就啥都不用管",
+  "user": "不行，要有交强险、处理违章。",
+  "base_hit": "VEHICLE:EXEMPT",
+  "cat": "已有",
+  "now_hit": "VEHICLE:EXEMPT",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 145,
+  "q": "哪些车不免检",
+  "user": "事故致死、非法改装、营运转非、面包车等。",
+  "base_hit": "VEHICLE:EXEMPT",
+  "cat": "已有",
+  "now_hit": "VEHICLE:EXEMPT",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 146,
+  "q": "营运改非营运",
+  "user": "不享受免检。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:USE_NATURE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 147,
+  "q": "面包车能免检吗",
+  "user": "不能。",
+  "base_hit": "VEHICLE:EXEMPT_NO",
+  "cat": "已有",
+  "now_hit": "VEHICLE:EXEMPT_NO",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 148,
+  "q": "检验标丢了",
+  "user": "电子标同等效力，12123申领。",
+  "base_hit": "VEHICLE:CYCLE",
+  "cat": "已有",
+  "now_hit": "VEHICLE:CYCLE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 149,
+  "q": "还要贴纸标吗",
+  "user": "不用，电子标即可。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:E_MARK",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 150,
+  "q": "年检过期了",
+  "user": "尽快补检，期间别上路。",
+  "base_hit": "VEHICLE:OVERDUE",
+  "cat": "已有",
+  "now_hit": "VEHICLE:OVERDUE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 151,
+  "q": "摩托车多久年检",
+  "user": "参照第6、10年规定。",
+  "base_hit": "VEHICLE:CYCLE",
+  "cat": "已有",
+  "now_hit": "VEHICLE:CYCLE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 152,
+  "q": "新能源车年检",
+  "user": "同燃油车。",
+  "base_hit": "VEHICLE:CYCLE",
+  "cat": "已有",
+  "now_hit": "VEHICLE:CYCLE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 153,
+  "q": "能预约年检吗",
+  "user": "12123预约检验。",
+  "base_hit": "VEHICLE:CYCLE",
+  "cat": "已有",
+  "now_hit": "VEHICLE:CYCLE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 154,
+  "q": "异地能年检吗",
+  "user": "能。",
+  "base_hit": "VEHICLE:CROSS_INSPECT",
+  "cat": "已有",
+  "now_hit": "VEHICLE:CROSS_INSPECT",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 155,
+  "q": "贷款还清怎么解押",
+  "user": "车管所办理解押。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:MORTGAGE_RELEASE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 156,
+  "q": "带什么材料",
+  "user": "身份证、登记证、结清证明等。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 157,
+  "q": "解押能代办吗",
+  "user": "能，需委托书。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:MORTGAGE_RELEASE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 158,
+  "q": "什么是注销登记",
+  "user": "报废、灭失等注销车辆。",
+  "base_hit": "CANCEL:LIST",
+  "cat": "已有",
+  "now_hit": "CANCEL:LIST",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 159,
+  "q": "达到报废标准",
+  "user": "交售给回收企业。",
+  "base_hit": "REG:SCRAP",
+  "cat": "已有",
+  "now_hit": "REG:SCRAP",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 160,
+  "q": "车在外地撞坏",
+  "user": "向当地回收企业交售报废。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 161,
+  "q": "异地报废怎么注销",
+  "user": "报废地传信息给登记地注销。",
+  "base_hit": "REG:SCRAP",
+  "cat": "已有",
+  "now_hit": "REG:SCRAP",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 162,
+  "q": "摩托报废怎么销户",
+  "user": "交回收企业拆解报废。",
+  "base_hit": "REG:SCRAP",
+  "cat": "已有",
+  "now_hit": "REG:SCRAP",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 163,
+  "q": "自愿报废",
+  "user": "申请注销登记。",
+  "base_hit": "REG:SCRAP",
+  "cat": "已有",
+  "now_hit": "REG:SCRAP",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 164,
+  "q": "车辆灭失",
+  "user": "申请注销。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 165,
+  "q": "被查封扣押能注销吗",
+  "user": "不能。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:CANCEL_BLOCK",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 166,
+  "q": "想保留原号注意啥",
+  "user": "注销前处理完违章。",
+  "base_hit": "REG:KEEP_PLATE",
+  "cat": "已有",
+  "now_hit": "REG:KEEP_PLATE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 167,
+  "q": "注销多久",
+  "user": "1日内。",
+  "base_hit": "RECOVER:WINDOW",
+  "cat": "已有",
+  "now_hit": "RECOVER:WINDOW",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 168,
+  "q": "报废要开车去吗",
+  "user": "交售回收企业，不用开到车管所。",
+  "base_hit": "REG:SCRAP",
+  "cat": "已有",
+  "now_hit": "REG:SCRAP",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 169,
+  "q": "电动车怎么上牌",
+  "user": "交验车，带身份证明等。",
+  "base_hit": "VEHICLE:CATEGORY",
+  "cat": "已有",
+  "now_hit": "VEHICLE:CATEGORY",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 170,
+  "q": "带什么材料",
+  "user": "身份证、发票、合格证、CCC证书。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 171,
+  "q": "车牌丢了",
+  "user": "到网点补领。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": "REG:REISSUE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 172,
+  "q": "临时牌怎么注销",
+  "user": "带身份证到交管部门、交回号牌。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "REG:TEMP_VOID",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 173,
+  "q": "超标车过渡期后",
+  "user": "不能上路，需置换或报废。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 174,
+  "q": "黄牌能换绿牌吗",
+  "user": "不能直接换，车要符合新国标。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 175,
+  "q": "怎么区分两类车",
+  "user": "看合格证/公告目录，新国标≤25km/h等。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 176,
+  "q": "电动摩托要驾照吗",
+  "user": "属机动车，要E/F证。",
+  "base_hit": "VEHICLE:CATEGORY",
+  "cat": "已有",
+  "now_hit": "VEHICLE:CATEGORY",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 177,
+  "q": "未满18能骑吗",
+  "user": "不能。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 178,
+  "q": "摩托车怎么上牌",
+  "user": "带材料到车管所查验注册。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "MOTO:REGISTER",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 179,
+  "q": "摩托能上高速吗",
+  "user": "黄牌可以，蓝牌轻便摩托不行。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "MOTO:HIGHWAY",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 180,
+  "q": "上高速能带人吗",
+  "user": "两轮摩托不能带人。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 181,
+  "q": "摩托临牌怎么装",
+  "user": "纸质随车携带即可。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 182,
+  "q": "二手车没来历证明",
+  "user": "可由街道/派出所出具合法证明。",
+  "base_hit": "VEHICLE:TRANSFER",
+  "cat": "已有",
+  "now_hit": "VEHICLE:TRANSFER",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 183,
+  "q": "违章能12123处理吗",
+  "user": "符合条件的可线上办。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "VIOLATION:ONLINE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 184,
+  "q": "哪些不能线上办",
+  "user": "罚款超200、记分超6分、现场处罚等。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 185,
+  "q": "线上处理啥条件",
+  "user": "警告或200元以下、6分以下、备案后发生。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 186,
+  "q": "忘密码又换手机号",
+  "user": "找回密码里用新手机号。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 187,
+  "q": "啥是备案非本人机动车",
+  "user": "把别人名下小型车绑到自己12123。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": "VIOLATION:FILING_COUNT",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 188,
+  "q": "能备案几辆",
+  "user": "最多3辆，每天1辆、每年5次。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "VIOLATION:FILING_COUNT",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 189,
+  "q": "怎么备案",
+  "user": "扫码或短信验证。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 190,
+  "q": "被别人备案怎么解除",
+  "user": "12123里解除备案关系。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ },
+ {
+  "idx": 191,
+  "q": "车被堵怎么挪车",
+  "user": "12123\"一键挪车\"。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": "MOVE:CAR",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 192,
+  "q": "挪车注意啥",
+  "user": "实名、拍清号牌、10分钟可催单。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "MOVE:CAR",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 193,
+  "q": "什么是快处快赔",
+  "user": "轻微事故快速处理理赔。",
+  "base_hit": "ACCIDENT:NO_SETTLE",
+  "cat": "已有",
+  "now_hit": "ACCIDENT:SELF_SETTLE",
+  "base_miss": false,
+  "now_miss": false
+ },
+ {
+  "idx": 194,
+  "q": "哪些事故能快处",
+  "user": "仅财产损失、无争议的碰撞。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "ACCIDENT:SELF_SETTLE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 195,
+  "q": "快处易赔从哪进",
+  "user": "微信公众号/随申办等入口。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": "ACCIDENT:SELF_SETTLE",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 196,
+  "q": "军人办业务带啥",
+  "user": "身份证或军官证等有效证件。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "ID:PROOF",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 197,
+  "q": "外籍人员带啥",
+  "user": "护照、签证/居留许可、住宿登记。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "ID:PROOF",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 198,
+  "q": "港澳台居民带啥",
+  "user": "港澳台居民居住证或通行证+住宿登记。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "ID:PROOF",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 199,
+  "q": "能委托别人代办吗",
+  "user": "能，需委托书和双方身份证明。",
+  "base_hit": "RAG(漏)",
+  "cat": "候选",
+  "now_hit": "AGENT:ENTRUST",
+  "base_miss": true,
+  "now_miss": false
+ },
+ {
+  "idx": 200,
+  "q": "怎么办业务预约",
+  "user": "当地政务APP或网上预约。",
+  "base_hit": "RAG(漏)",
+  "cat": "操作",
+  "now_hit": null,
+  "base_miss": true,
+  "now_miss": true
+ }
+]
