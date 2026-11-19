@@ -18,7 +18,8 @@
 import re
 from typing import Dict, Optional
 
-from fact_common import source, result, LICENSE_TABLE, extract_codes, ABROAD_SELF, ABROAD_EXPIRE
+from fact_common import (source, result, LICENSE_TABLE, extract_codes, ABROAD_SELF, ABROAD_EXPIRE,
+                         BODY_CHANGE_TOPIC, BODY_CHANGE_EXCLUDE)
 
 LAW = "《机动车驾驶证申领和使用规定》（公安部令第172号）"
 LAW_REG = "《机动车登记规定》（公安部令第164号）"
@@ -221,10 +222,12 @@ def q_info_change(q: str) -> Optional[Dict]:
 # 五、身体条件变化（第六十七条）
 # ============================================================
 def q_body_change(q: str) -> Optional[Dict]:
-    if not re.search(r"(身体条件|身体状况|身体).{0,10}(变化|不适合|不符合|下降)", q) \
-            and not re.search(r"(不适合|不符合).{0,8}驾驶", q):
+    # 2026-11-19：判据抽公共常量，与调度层共用一份。原守卫只认「身体条件变化」
+    # 书面语，口语「生病了不能开车」「残疾了驾照怎么办」全掉检索层被答成无关条文。
+    # 反向守卫挡住申请阶段体检与单项身体条件判定（色盲/视力/身高），归各自处理器。
+    if re.search(BODY_CHANGE_EXCLUDE, q):
         return None
-    if "体检" in q:
+    if not re.search(BODY_CHANGE_TOPIC, q):
         return None
     return result(
         "**身体条件发生变化、不再符合所持准驾车型条件的，按两种情况处理（第六十七条）：**\n\n"

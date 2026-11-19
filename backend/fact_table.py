@@ -36,7 +36,7 @@ from fact_common import (
     AGE_RULES, AGE_SPECIAL, FORBIDDEN_AT_63, FORBIDDEN_AT_70, DOWNGRADE_RULES,
     ADD_RULES, NO_YEAR_ADD, extract_codes, covers, covering_codes,
     norm, has, fmt_codes, num_style, detect_aspects, source, result,
-    EXAM_TRANSFER_TOPIC,
+    EXAM_TRANSFER_TOPIC, BODY_CHANGE_TOPIC,
 )
 
 import fact_admin
@@ -1115,8 +1115,9 @@ _HANDLERS = [
     (fact_admin.q_school_bus, r"校车", {"DURATION", "PROCEDURE"}),
     (fact_admin.q_info_change,
      r"(信息|地址|电话|联系方式|住址|姓名).{0,8}(变更|变化|改了|换了)", {"PROCEDURE"}),
-    (fact_admin.q_body_change,
-     r"(身体条件|身体状况|身体).{0,10}(变化|不适合|不符合|下降)", {"PROCEDURE", "QUALIFY"}),
+    # 2026-11-19：主题正则改吃公共常量（与处理器同一份），接住「生病了不能开车」
+    # 「残疾了驾照怎么办」等口语；排除词在常量里，不抢申请体检与单项身体判定。
+    (fact_admin.q_body_change, BODY_CHANGE_TOPIC, {"PROCEDURE", "QUALIFY"}),
     # 主题正则必须含「军人/服役」：线上问法是"军人换 B2 考几科""退役军人换大货车要考什么"，
     # 不含"军队/部队/武警"任一字，处理器写得再对也进不来（本项目第五次栽在这一处）。
     # cov 同时补 SUBJECT/DEFINE：「考几科」判 SUBJECT、「驾龄怎么算」判 DEFINE，
