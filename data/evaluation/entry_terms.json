@@ -327,6 +327,83 @@
           "why": "问材料，不是去哪做体检"
         }
       ]
+    },
+    {
+      "term": "科目二怎么约考",
+      "handler": "table_yuekao_appointment",
+      "added_at": "2026-11-19",
+      "why": "线上错答：问「科目二怎么约考」，事实层 asks_times 只认「多久能约/重新预约」，整句掉进检索层；检索层抓到便民措施 2.6 的「科目三约考间隔由30日缩到20日」，与同节上一条「C2科目二取消坡道定点」混在一起，答成科目二满20日并引第四十四条（科目三条款）。科目二实际是第四十三条满10日（大型车20日）。本入口词按「怎么约考/预约考试/多少天能预约」整类收进来，守卫提前量、补考、次数、考试内容、合格分、体检材料。",
+      "positive": [
+        {
+          "q": "科目二怎么约考",
+          "expect": "EXAM:YUEKAO_GAP_S2"
+        },
+        {
+          "q": "科目二预约考试",
+          "expect": "EXAM:YUEKAO_GAP_S2"
+        },
+        {
+          "q": "科目二多少天能预约",
+          "expect": "EXAM:YUEKAO_GAP_S2"
+        },
+        {
+          "q": "考科目二要满多少天",
+          "expect": "EXAM:YUEKAO_GAP_S2"
+        },
+        {
+          "q": "C2科目二多少天能约",
+          "expect": "EXAM:YUEKAO_GAP_S2"
+        },
+        {
+          "q": "科目3怎么约考",
+          "expect": "EXAM:YUEKAO_GAP_S3"
+        },
+        {
+          "q": "科目三约考要多久",
+          "expect": "EXAM:YUEKAO_GAP_S3"
+        },
+        {
+          "q": "科目2怎么约考",
+          "expect": "EXAM:YUEKAO_GAP_S2"
+        }
+      ],
+      "negative": [
+        {
+          "q": "科目二预约考试要提前几天",
+          "expect": "EXAM:LEAD",
+          "why": "问提前量，法规无统一规定，不能被约考间隔抢走"
+        },
+        {
+          "q": "科目二考不过多久能再约",
+          "expect": "EXAM:TIMES",
+          "why": "补考间隔第四十七条，不是初次约考间隔"
+        },
+        {
+          "q": "科目二最多能约几次",
+          "expect": "EXAM:TIMES",
+          "why": "问5次上限，不是等待天数"
+        },
+        {
+          "q": "科目二考什么",
+          "expect": "EXAM:S2_CONTENT",
+          "why": "问考试内容，不是约考"
+        },
+        {
+          "q": "科目二考试要多少分",
+          "expect": "EXAM:PASS_S2",
+          "why": "问合格分，不是约考"
+        },
+        {
+          "q": "科目二预约考试要体检吗",
+          "expect_not": "EXAM:YUEKAO_GAP_S2",
+          "why": "问体检要求，答等待天数就是答非所问"
+        },
+        {
+          "q": "科目二考试有效期多久",
+          "expect": "EXAM:SCORE_VALID",
+          "why": "问成绩保留期，不是约考间隔"
+        }
+      ]
     }
   ]
 }
