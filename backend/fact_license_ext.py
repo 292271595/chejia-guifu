@@ -17,7 +17,8 @@ from fact_common import (extract_codes, covers, source, result, has, norm, cn2in
                          LICENSE_TABLE, covers as _covers,
                          ABROAD_SELF as _ABROAD_SELF, ABROAD_EXPIRE as _ABROAD_EXPIRE,
                          EXAM_TRANSFER_TOPIC, EXAM_TRANSFER_SCOPE, EXAM_TRANSFER_EXCLUDE,
-                         APPLY_MEDICAL_TOPIC, APPLY_MEDICAL_MED, APPLY_MEDICAL_EXCLUDE)
+                         APPLY_MEDICAL_TOPIC, APPLY_MEDICAL_MED, APPLY_MEDICAL_EXCLUDE,
+                         RENEW_TOPIC, RENEW_HOW, RENEW_CTX, RENEW_CTX_EXCLUDE)
 
 LAW = "《机动车驾驶证申领和使用规定》（公安部令第172号）"
 LAW_SCORE = "《道路交通安全违法行为记分管理办法》（公安部令第163号）"
@@ -403,7 +404,7 @@ def _renew_overdue(years: float) -> Dict:
 def q_renew(q: str) -> Optional[Dict]:
     # "逾期"和"过期"是两个词：用户常说"逾期1年未换证怎么恢复"，
     # 只写"过期"会把整类问题漏到 RAG，模型只答流程不点明要考科目一。
-    if not re.search(r"(换证|换领|有效期|到期|过期|逾期|超期|失效|核发地|转入|迁入|异地|延期)", q):
+    if not re.search(RENEW_TOPIC, q):
         # 省略说法：「驾照超了三年怎么办」——句子里没有「换证」二字，但语义就是超期未换。
         # 必须先把吊销语境排掉：那是「什么时候能重考」，跟超期未换证是两个问题，
         # 混进来会答成「超期三年的三档」，而用户问的是禁考期。
@@ -688,7 +689,13 @@ def q_renew(q: str) -> Optional[Dict]:
                     "driving_license.md")],
             "RENEW:DAMAGED_30")
 
-    if re.search(r"(提前|多久|什么时候|多长时间|期限|几日内)", q) or "换证" in q:
+    # 口语兜底：「到期怎么换」「快到期了怎么办」「换驾驶证去哪办」没有「换证」二字，
+    # 也没有时间词，原来落到 return None 掉 RAG。带驾证语境的 PROCEDURE 口语在这里接住。
+    _renew_how = (re.search(RENEW_HOW, q)
+                  and re.search(RENEW_CTX, q)
+                  and not re.search(RENEW_CTX_EXCLUDE, q))
+    if (re.search(r"(提前|多久|什么时候|多长时间|期限|几日内)", q)
+            or "换证" in q or "换领" in q or _renew_how):
         return result(
             "**期满换证应当在有效期满前 90 日内办理。**\n\n"
             "依据第六十三条：机动车驾驶人应当于机动车驾驶证**有效期满前 90 日内**，"

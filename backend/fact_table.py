@@ -38,6 +38,7 @@ from fact_common import (
     norm, has, fmt_codes, num_style, detect_aspects, source, result,
     EXAM_TRANSFER_TOPIC, BODY_CHANGE_TOPIC,
     APPLY_MEDICAL_TOPIC, APPLY_MEDICAL_MED,
+    RENEW_TOPIC,
 )
 
 import fact_admin
@@ -1172,10 +1173,7 @@ _HANDLERS = [
     # ── 14. 换证 / 有效期 / 核发地 / 延期 ──
     # cov 必须含 PENALTY：问「不换证什么后果」会被识别成罚则诉求，
     # 不含它就卡在调度口，处理器永远进不来（这类"改处理器却没改 cov"已经踩过三次）。
-    (ext.q_renew,
-     r"(换证|换领|有效期|到期|过期|逾期|超期|失效|核发地|转入|迁入|延期"
-     r"|超过?\s*(?:了|已经|已|有)?\s*[0-9一二两三四五六七八九十]+\s*年"
-     r"|[0-9一二两三四五六七八九十]+\s*年\s*(?:多|了)?\s*(?:没|未)\s*(?:换|续))",
+    (ext.q_renew, RENEW_TOPIC,
      {"DURATION", "VALIDITY", "PROCEDURE", "QUALIFY", "PENALTY", "SUBJECT"}),
     # ── 考到一半换城市（第三十九条第三款）──
     # 2026-11-19：主题正则改吃公共常量（与处理器同一份），cov 补 VALUE/DURATION——

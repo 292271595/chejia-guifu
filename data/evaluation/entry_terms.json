@@ -724,6 +724,26 @@
         { "q": "70岁以上每年体检", "expect": "PHYSICAL_REPORT:70", "why": "问持证后体检周期，不是申请时体检" },
         { "q": "体检去哪做", "expect": "PHYSICAL:WHERE", "why": "问体检机构地点，不是要不要体检" }
       ]
+    },
+    {
+      "term": "驾驶证到期怎么换",
+      "handler": "q_renew",
+      "added_at": "2026-11-19",
+      "why": "用户真实问答清单第37/38/42条换证口语问法：q_renew 入口正则和调度正则只认「换证/换领」二字，「到期怎么换/快到期怎么办/怎么换新证/期满怎么办」全漏 RAG，末尾兜底分支也不认口语。两处正则抽公共常量 RENEW_TOPIC 统一（两处漂移坑第6次），兜底加驾证语境守卫防「换手机号/换车牌/换驾照照片」误伤。正向同义与反向守卫在此登记。",
+      "positive": [
+        { "q": "驾驶证到期怎么换", "expect": "RENEW:BEFORE_90" },
+        { "q": "驾照快到期了怎么办", "expect": "RENEW:BEFORE_90" },
+        { "q": "换驾驶证去哪办", "expect": "RENEW:BEFORE_90" },
+        { "q": "驾驶证怎么换新证", "expect": "RENEW:BEFORE_90" },
+        { "q": "驾驶证期满怎么办", "expect": "RENEW:BEFORE_90" },
+        { "q": "C1到期怎么换", "expect": "RENEW:BEFORE_90" }
+      ],
+      "negative": [
+        { "q": "换驾照照片怎么弄", "expect_not": "RENEW", "why": "问证件照，不是换证" },
+        { "q": "合同到期怎么办", "expect_not": "RENEW", "why": "非驾证语境，不能被口语兜底抢" },
+        { "q": "变更考试地最多能变几次", "expect": "EXAM:TRANSFER", "why": "问考试地变更次数，不是换证" },
+        { "q": "驾驶证损毁了怎么换", "expect": "RENEW:DAMAGED_30", "why": "损毁换证是30日分支，不是期满90日" }
+      ]
     }
   ]
 }
