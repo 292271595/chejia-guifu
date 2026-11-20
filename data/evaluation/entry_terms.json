@@ -2275,6 +2275,61 @@
           "why": "驾驶证遗失归 REG:REISSUE"
         }
       ]
-    }
+    },
+  {
+    "term": "检车不合格 / 年检没过",
+    "handler": "table_vehicle_inspect_fail（VEHICLE:INSPECT_FAIL）",
+    "added_at": "2026-11-20",
+    "why": "线上真实反馈：问「检车不合格怎么办」，被 q_inspection_cycle 兜底答成检验周期表。「检车/年检」是既有的车辆入口词，但「不合格/没过/没通过/不过」这个诉求没有任何处理器认领，所有带这类词的年检问句都会掉进周期兜底。本行接住「车辆检验 + 不合格」整类。影响面扫描：①「科目二考试不合格」「科目三挂了」被 exclude 考试词挡，仍归 EXAM:TIMES；②「体检不合格能考驾照吗」被 exclude 体检词挡，仍归 PHYSICAL_REPORT；③「年检逾期怎么罚」不含不合格词，仍归记分/逾期处罚；④「连续3个周期不检会报废吗」仍归 VEHICLE:SCRAP；⑤「年检多少钱」「年检怎么预约」被金额/预约守卫挡，仍走检索层或周期；⑥「新车上牌检验不合格」被上牌守卫挡，仍归 REG:NEW_CAR；⑦「尾气检测不合格」被排放守卫挡（排放检验法源不同，不硬答）；⑧转折词「不过」必须紧跟检验词才算数，「年检怎么弄，不过我忘了带材料」不被抢。",
+    "positive": [
+      {
+        "q": "检车不合格怎么办",
+        "expect": "VEHICLE:INSPECT_FAIL"
+      },
+      {
+        "q": "年检不合格怎么办",
+        "expect": "VEHICLE:INSPECT_FAIL"
+      },
+      {
+        "q": "验车没过怎么办",
+        "expect": "VEHICLE:INSPECT_FAIL"
+      },
+      {
+        "q": "车检不过怎么办",
+        "expect": "VEHICLE:INSPECT_FAIL"
+      },
+      {
+        "q": "年检不合格能复检吗",
+        "expect": "VEHICLE:INSPECT_FAIL"
+      }
+    ],
+    "negative": [
+      {
+        "q": "科目二考试不合格怎么办",
+        "expect_not": "VEHICLE:INSPECT_FAIL",
+        "why": "考试不合格归考试域，可当场补考，不能答成年检复检"
+      },
+      {
+        "q": "体检不合格能考驾照吗",
+        "expect_not": "VEHICLE:INSPECT_FAIL",
+        "why": "身体条件判定不是车辆检验"
+      },
+      {
+        "q": "年检逾期怎么罚",
+        "expect_not": "VEHICLE:INSPECT_FAIL",
+        "why": "逾期处罚是另一条诉求，归记分/逾期处理器"
+      },
+      {
+        "q": "年检怎么弄，不过我忘了带材料",
+        "expect_not": "VEHICLE:INSPECT_FAIL",
+        "why": "「不过」是转折词，不是不合格；必须紧跟检验词才算数"
+      },
+      {
+        "q": "新车上牌检验不合格怎么办",
+        "expect_not": "VEHICLE:INSPECT_FAIL",
+        "why": "注册登记查验法源不同，归 REG:NEW_CAR"
+      }
+    ]
+  }
   ]
 }

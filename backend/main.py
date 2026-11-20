@@ -520,6 +520,10 @@ def submit_feedback(request: FeedbackRequest, http_request: Request):
     排查的人看不出是哪一步断的。宁可返回一条带异常类型的结果，也不给 500。
     """
     openid = http_request.headers.get("X-WX-OPENID", "")
+    # 来源 IP 只用于限流分桶：openid 拿不到时（未登录/测试号/网关丢头），
+    # 若继续共用 "anonymous" 桶，别人把 60 条配额用满，你就第一次点也点不动。
+    cip = (http_request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+           or (http_request.client.host if http_request.client else ""))
     reason = (request.reason or "").strip()
     try:
         res = feedback.save({
@@ -531,7 +535,7 @@ def submit_feedback(request: FeedbackRequest, http_request: Request):
             "reason": reason,
             "reason_label": FEEDBACK_REASONS.get(reason, reason),
             "note": request.note,
-        }, openid=openid)
+        }, openid=openid, client_ip=cip)
 
         if not res["ok"]:
             # 限流也返回 200：前端不需要区分，它只需要知道"这次没传上去"，

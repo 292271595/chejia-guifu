@@ -172,10 +172,28 @@ def _log(line: str) -> None:
         pass
 
 
-def _allowed(openid: str) -> bool:
+def _rate_key(openid: str, client_ip: str) -> str:
+    """限流分桶的键。
+
+    为什么不能直接 `openid or "anonymous"`：平台没注入 X-WX-OPENID 的场景
+    （未登录、测试号、网关丢头、直接调公网接口）会让**所有用户挤进同一个
+    60 条/小时的桶**。表现是最难查的一种：某个用户第一次点「回答不准」就被
+    判「提交太频繁」，而他自己一条都没报过——桶是被别人用满的。
+
+    退到来源 IP 不是精确方案（NAT 后可能重合、XFF 可伪造），但比全站共用
+    一个桶好得多；这个限流本来就只防手滑和脚本，不承担安全职责。
+    """
+    if openid:
+        return "u:" + openid
+    if client_ip:
+        return "ip:" + client_ip
+    return "anonymous"
+
+
+def _allowed(key: str) -> bool:
     """简单的滑动窗口限流。进程内内存即可——多实例部署时各算各的，
     这种量级下不追求全局精确，挡住连点就够了。"""
-    key = openid or "anonymous"
+    key = key or "anonymous"
     now = time.time()
     with _lock:
         arr = [t for t in _hits.get(key, []) if now - t < _WINDOW]
@@ -331,13 +349,13 @@ def _format_for_human(rec: Dict, kind: str = "wecom") -> str:
     return "\n".join(lines)
 
 
-def save(payload: Dict, openid: str = "") -> Dict:
+def save(payload: Dict, openid: str = "", client_ip: str = "") -> Dict:
     """收下一条反馈。返回 {"ok": bool, "id": str, "reason": str}。
 
     不抛异常——上报失败不该让用户看到一个红色错误框，
     他自己已经遇到一次「答错了」，再失败一次体验更差。
     """
-    if not _allowed(openid):
+    if not _allowed(_rate_key(openid, client_ip)):
         return {"ok": False, "id": "", "reason": "too_many"}
 
     now = _now()

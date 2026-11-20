@@ -101,6 +101,67 @@ function ask(question, history) {
 // 它防的是检索层偶尔吐出的超长回答，以及用户自己粘贴的大段内容。
 const FB_MAX_BYTES = 60000;
 
+/* ---------- 反馈失败留痕与补传 ----------
+ *
+ * 为什么要有这一层：反馈是用户主动点的那一下，一次失败就永久消失。
+ * 网络抖一下、发版期间 404 一下，这条样本就没了——而它恰恰是最贵的样本
+ * （用户愿意花时间告诉你哪里错了）。
+ *
+ * 失败分两种，处理方式不同：
+ *   · 后端收了但明确说不行（限流、服务端异常）—— 再发还是同样结果，不排队，只留痕；
+ *   · 根本没到后端（断网/超时/网关 5xx/接口不存在）—— 存进队列，下次进页面补传。
+ *
+ * 队列最多 10 条、每条最多补 3 次，防止接口一直 404 时无限堆积。
+ * 留痕放在 Storage 里，真机上开发者工具 → Storage 面板就能看到，
+ * 不用连真机调试也能知道「到底失败在哪一步」。
+ */
+const FB_QUEUE_KEY = 'fb_pending';
+const FB_ERR_KEY = 'fb_errors';
+const FB_QUEUE_MAX = 10;
+const FB_RETRY_MAX = 3;
+
+function _readArr(key) {
+  try {
+    const v = wx.getStorageSync(key);
+    return Array.isArray(v) ? v : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function _writeArr(key, arr, max) {
+  try {
+    wx.setStorageSync(key, arr.slice(-max));
+  } catch (e) {
+    console.warn('[feedback] 本地存储写入失败', e);
+  }
+}
+
+function _noteFail(info) {
+  const arr = _readArr(FB_ERR_KEY);
+  arr.push(info);
+  _writeArr(FB_ERR_KEY, arr, 20);
+}
+
+function _enqueue(body, why) {
+  const arr = _readArr(FB_QUEUE_KEY);
+  arr.push({ body: body, tries: 0, why: why || '', at: Date.now() });
+  _writeArr(FB_QUEUE_KEY, arr, FB_QUEUE_MAX);
+}
+
+function _giveUpOrKeep(arr, item, why) {
+  item.tries = (item.tries || 0) + 1;
+  if (item.tries >= FB_RETRY_MAX) {
+    arr.shift();
+    _noteFail({ at: Date.now(), kind: 'dropped', msg: why });
+    console.warn('[feedback] 补传 ' + FB_RETRY_MAX + ' 次仍失败，丢弃：' + why);
+  } else {
+    arr[0] = item;
+  }
+  _writeArr(FB_QUEUE_KEY, arr, FB_QUEUE_MAX);
+  return 0;
+}
+
 function utf8Len(str) {
   let n = 0;
   for (let i = 0; i < str.length; i++) {
@@ -135,16 +196,64 @@ function submitFeedback(fb) {
     console.warn('[feedback] 答案超长，压缩后上报：原 ' + (body.answer || '').length + ' 字');
     body.answer = trimmed.text;
   }
-  return _post('/api/feedback', body).catch((err) => {
+  return _post('/api/feedback', body).then((res) => {
+    if (res && res.success) return res;
+    // 走到了后端、被后端明确拒收（限流 / 服务端异常）。再发也是同样结果，
+    // 不排队；但要留痕，否则「被拒了多少次、什么原因」永远查不到。
+    _noteFail({ at: Date.now(), kind: 'rejected', msg: (res && res.message) || '' });
+    return (res && res.success === false) ? res : { success: false, message: '没传上去' };
+  }).catch((err) => {
     // 打成一行纯文本，别只丢一个 Error 对象——真机调试里对象是收起的，
     // 状态码这种关键字段永远看不到。
-    console.warn(
-      '[feedback] 提交失败 status=' + ((err && err.statusCode) === undefined ? 'undefined' : err.statusCode) +
-      ' detail=' + ((err && err.detail) || '(空)') +
-      ' msg=' + ((err && err.message) || '')
-    );
-    return { success: false, message: (err && err.message) || '没传上去' };
+    const status = (err && err.statusCode) === undefined ? 'undefined' : err.statusCode;
+    const detail = (err && err.detail) || '(空)';
+    console.warn('[feedback] 提交失败 status=' + status + ' detail=' + detail +
+      ' msg=' + ((err && err.message) || ''));
+    _noteFail({ at: Date.now(), kind: 'error', status: status, detail: String(detail).slice(0, 200) });
+    // 没到后端（断网/超时/网关 5xx/接口不存在）：存起来，下次进页面自动补传。
+    _enqueue(body, 'status=' + status);
+    return {
+      success: false,
+      queued: true,
+      message: (err && err.message) || '没传上去'
+    };
   });
+}
+
+/**
+ * 把上次没传上去的反馈补发一条。返回补发成功的条数（0 或 1）。
+ *
+ * 一次只补一条：接口真挂了的时候，连发十条只会把启动拖慢、日志刷满。
+ * 每次进首页补一条，攒的几条也就补完了。
+ */
+function flushFeedbackQueue() {
+  const arr = _readArr(FB_QUEUE_KEY);
+  if (!arr.length) return Promise.resolve(0);
+  const item = arr[0];
+  if (!item || !item.body) {
+    arr.shift();
+    _writeArr(FB_QUEUE_KEY, arr, FB_QUEUE_MAX);
+    return Promise.resolve(0);
+  }
+  return _post('/api/feedback', item.body).then((res) => {
+    if (res && res.success) {
+      arr.shift();
+      _writeArr(FB_QUEUE_KEY, arr, FB_QUEUE_MAX);
+      console.info('[feedback] 补传成功，队列剩 ' + arr.length + ' 条');
+      return 1;
+    }
+    return _giveUpOrKeep(arr, item, 'rejected:' + ((res && res.message) || ''));
+  }).catch((err) => {
+    return _giveUpOrKeep(arr, item, 'error:' + ((err && err.statusCode) || ''));
+  });
+}
+
+/** 本地留存的失败记录，供排查用（真机上看不到 console，这个能看）。 */
+function feedbackDiagnostics() {
+  return {
+    pending: _readArr(FB_QUEUE_KEY),
+    errors: _readArr(FB_ERR_KEY)
+  };
 }
 
 /** blocks 还原成纯文本，用于“复制答案” */
@@ -163,4 +272,4 @@ function blocksToText(blocks) {
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-module.exports = { ask, submitFeedback, blocksToText };
+module.exports = { ask, submitFeedback, flushFeedbackQueue, feedbackDiagnostics, blocksToText };

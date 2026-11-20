@@ -1,5 +1,5 @@
 const cfg = require('../../config.js');
-const { ask, submitFeedback, blocksToText } = require('../../utils/request.js');
+const { ask, submitFeedback, flushFeedbackQueue, blocksToText } = require('../../utils/request.js');
 
 let seq = 0;
 const nextId = () => `m${++seq}_${Date.now()}`;
@@ -26,6 +26,8 @@ Page({
 
   onLoad() {
     console.info('[mode]', cfg.useCloud ? 'callContainer（云托管）' : 'wx.request（本地调试）');
+    // 上次没传上去的反馈，进页面时补一条。失败不打扰用户——他此时正在问新问题。
+    flushFeedbackQueue().catch(() => {});
   },
 
   /* ---------- 滚动到底 ---------- */
@@ -225,13 +227,22 @@ Page({
       note: m.fbNote || ''
     }).then((res) => {
       const done = !!(res && res.success);
+      const queued = !!(res && res.queued);
+      // 排队也算「收下」：不关掉面板的话用户会重复点，同一条反馈会入队好几次。
+      const accepted = done || queued;
       this.setData({
         [`messages[${i}].fbSending`]: false,
-        [`messages[${i}].fbDone`]: done,
+        [`messages[${i}].fbDone`]: accepted,
         [`messages[${i}].fbOpen`]: false
       });
+      // 三种结果分开说：成功、已存起来等下次补传、真的没成。
+      // 全都说「没传上去」会让用户重复点，反而更烦。
+      let title = '没传上去，再试一次';
+      if (done) title = '收到，谢谢';
+      else if (queued) title = '已记下，下次自动补传';
+      else if (res && res.message) title = res.message;
       wx.showToast({
-        title: done ? '收到，谢谢' : '没传上去，再试一次',
+        title: title,
         icon: done ? 'success' : 'none'
       });
     });
