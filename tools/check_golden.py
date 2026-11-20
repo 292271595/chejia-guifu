@@ -29,7 +29,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "backend"))
 
-GOLDEN = os.path.join(ROOT, "data", "knowledge_table", "golden.json")
+GOLDEN = os.path.join(ROOT, "backend", "knowledge_data", "golden.json")
 KB_DIR = os.path.join(ROOT, "data", "knowledge_base")
 
 # 全角→半角 + 中文数字→阿拉伯。quota 与知识库比对时两边都归一化，

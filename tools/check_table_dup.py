@@ -42,7 +42,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND = os.path.join(ROOT, "backend")
 sys.path.insert(0, BACKEND)
-TABLE_DIR = os.path.join(ROOT, "data", "knowledge_table")
+TABLE_DIR = os.path.join(ROOT, "backend", "knowledge_data")
 # 生成器自身不算实现，否则每行都会被自己搜到
 SKIP_FILES = {"knowledge_table.py"}
 

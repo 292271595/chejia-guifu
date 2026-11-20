@@ -31,9 +31,12 @@ import os
 import re
 from typing import Dict, Optional
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_TABLE = os.path.join(_ROOT, "data", "knowledge_table", "edge.json")
-_CACHE = os.path.join(_ROOT, "data", "knowledge_table", "answer_bank_cache.npz")
+import knowledge_table
+
+# 表的目录只在 knowledge_table.DIR 里写一次，别在这儿再抄一遍路径：
+# 抄两遍的后果是「挪了表、忘了改这里」，线上答案库静默关掉。
+_TABLE = os.path.join(knowledge_table.DIR, "edge.json")
+_CACHE = os.path.join(knowledge_table.DIR, "answer_bank_cache.npz")
 
 _TOP_K = 3       # 召回候选数：实验显示危险对常排 top1，3 条给守卫轮询足够
 _MIN_SIM = 0.75  # 召回下限：低于它连守卫都不必跑（实验中危险对最低 0.71）

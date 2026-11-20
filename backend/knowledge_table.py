@@ -39,8 +39,13 @@ from typing import Callable, Dict, List, Optional
 
 from fact_common import result
 
-_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                    "data", "knowledge_table")
+# 表放在 backend 下，不放 data/：镜像的 .dockerignore 排掉了整个 data/，
+# 放在那里就意味着「本地一切正常、线上 8 条表驱动知识点静默消失」。
+# 症状极隐蔽——只有一行 stdout 提示，而云托管 stdout 只留 7 天。
+# 同一条理由在 Dockerfile 里对 kb_index/*.json 已经写过一次，这里是第二例。
+DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "knowledge_data")
+
+_DIR = DIR
 
 _CN = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6,
        "七": 7, "八": 8, "九": 9, "十": 10}

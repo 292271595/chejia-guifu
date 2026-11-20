@@ -650,6 +650,22 @@ def _resource_status() -> dict:
     return out
 
 
+def _table_status() -> dict:
+    """知识点表（表驱动事实层）的加载情况。
+
+    为什么必须露在 /health 里：这张表是 JSON 文件驱动的，文件不在**不会报错**，
+    只会让整批知识点悄悄退出匹配。真实踩过：表原本放在 data/knowledge_table/，
+    而 .dockerignore 排掉了整个 data/ —— 本地全绿、线上 8 条知识点全没了，
+    接口照样 200，只有启动时一行 stdout（云托管只留 7 天）。
+    `edge` 是行数，0 或 -1 就说明线上少了一整块答案，别再去猜问法。
+    """
+    try:
+        import knowledge_table
+        return {"edge": len(knowledge_table.load("edge")), "dir": knowledge_table.DIR}
+    except Exception as e:
+        return {"edge": -1, "error": type(e).__name__}
+
+
 @app.get("/health")
 def health():
     """给云托管健康检查用：只回进程活跃，不查知识库（避免探针把冷启动拖长）。
@@ -695,6 +711,9 @@ def health():
         # 日志只能等云托管 stdout（7 天后消失）。days/last_day 让"到底攒了多少"
         # 不用调导出接口也能看见——配了口令却导出为空时，一眼能分清是没配还是没数据。
         "query_log": _query_log_status(),
+        # 表驱动事实层的行数。0 就是「线上少了一整批知识点」——
+        # 这种缺失不报错、不改状态码，只能靠这个数字看见。
+        "tables": _table_status(),
     }
 
 

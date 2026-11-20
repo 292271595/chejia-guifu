@@ -27,7 +27,7 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TABLE_DIR = os.path.join(ROOT, "data", "knowledge_table")
+TABLE_DIR = os.path.join(ROOT, "backend", "knowledge_data")
 KB_DIR = os.path.join(ROOT, "data", "knowledge_base")
 
 REQUIRED = ["id", "topic", "answer", "sources"]

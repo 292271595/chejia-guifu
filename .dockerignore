@@ -7,6 +7,10 @@ chroma_db.bak*
 .git/
 .gitignore
 tools/
+# 注意：data/ 整个排除，所以**任何运行时必需的东西都不能放 data/**
+# 知识点表（表驱动事实层）和答案库种子都从这里搬走过一次，就是因为这个坑：
+# 本地正常、线上静默少一整批答案。现在它们在 backend/knowledge_data/，
+# 跟着 COPY backend/ 自动进镜像。新增运行时数据文件请照此办理。
 data/
 miniprogram/
 assets_src/

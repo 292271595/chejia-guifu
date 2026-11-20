@@ -35,6 +35,11 @@ COPY frontend/ /app/frontend/
 #   glossary_colloquial.json 口语术语改写表
 # 它们缺了都不会报错，只会静默关掉对应的那一层校验，所以刻意放在 backend/ 里——
 # 只要 COPY backend/ 在，就不可能漏。别再把这类文件放到 data/（.dockerignore 排除了它）。
+#
+# 同一类推而广之：backend/knowledge_data/ 放知识点表 edge.json 和答案库种子，
+# 也是「缺了不报错、只会整批知识点失效」的东西。它原本在 data/knowledge_table/，
+# 结果镜像里根本没有 —— 上线后 8 条表驱动知识点全没了，接口还是 200。
+# /health 的 tables.edge 行数就是给这种情况留的探针。
 
 WORKDIR /app/backend
 EXPOSE 80

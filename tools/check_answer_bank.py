@@ -55,7 +55,7 @@ def main():
     ab.reset(embedding_fn=fn)
 
     # ── 种子同步 ──
-    with open(os.path.join(ROOT, "data", "knowledge_table", "edge.json"), encoding="utf-8") as f:
+    with open(os.path.join(ROOT, "backend", "knowledge_data", "edge.json"), encoding="utf-8") as f:
         rows = json.load(f).get("rows") or []
     expect_n = sum(len((r.get("verify") or {}).get("questions") or []) for r in rows)
     seeds = ab._load_seeds()
