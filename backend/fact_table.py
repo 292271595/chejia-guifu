@@ -39,7 +39,8 @@ from fact_common import (
     EXAM_TRANSFER_TOPIC, BODY_CHANGE_TOPIC, EXAM_LOCAL_APPLY_TOPIC,
     ADD_TOPIC, ADD_SCORE_TOPIC,
     APPLY_MEDICAL_TOPIC, APPLY_MEDICAL_MED,
-    RENEW_TOPIC, REISSUE_TOPIC,
+    RENEW_TOPIC, REISSUE_TOPIC, NON_LICENSE_DOC,
+    INFO_CHANGE_TOPIC,
     DOWNGRADE_TOPIC, DOWNGRADE_AGE, DOWNGRADE_EXCLUDE,
 )
 
@@ -1192,9 +1193,12 @@ _HANDLERS = [
     # 主动排除，然后一路掉检索层，贴出「第三十二条 科目一考试内容」原文，
     # 答非所问（联网 100 问 W030）。cov 要同时挂 DURATION 和 SUBJECT：
     # 「科目一成绩多久出来」的诉求是这两个，漏一个就在调度口被挡。
+    # 主题词与 fact_exam.SCORE_ASK_OBJ / SCORE_ASK_WHEN 必须同步：这里只认「成绩」，
+    # 处理器又扩了「过没过」，就是调度口把整句挡在外面（2026-11-19「科二考完多久
+    # 知道过没过」MISS）。改一边必须改另一边。
     (fact_exam.q_score_release,
-     r"(成绩|分数|出分|考试结果).{0,10}(出来|公布|查到|能查|查询|多久出|什么时候出|几天出|知道)|"
-     r"(多久|什么时候|几天).{0,8}(出成绩|出分|查成绩|知道成绩|知道分数)",
+     r"(成绩|分数|出分|考试结果|过没过|合格没|考过没).{0,12}(出来|公布|查到|能查|查询|多久出|什么时候出|几天出|知道|啥时候)|"
+     r"(多久|什么时候|几天|啥时候).{0,12}(出成绩|出分|查成绩|知道成绩|知道分数|知道过没过|知道自己)",
      {"DURATION", "SUBJECT"}),
     # ── 11. 考试科目与合格标准 ──
     # 主题词必须含「科四」「安全文明」：口语把安全文明叫科四，只写「科目[一二三四]」
@@ -1252,8 +1256,9 @@ _HANDLERS = [
      {"DURATION", "PROCEDURE", "QUALIFY"}),
     (fact_admin.q_overdue_review, r"审验", {"PENALTY"}),
     (fact_admin.q_school_bus, r"校车", {"DURATION", "PROCEDURE"}),
-    (fact_admin.q_info_change,
-     r"(信息|地址|电话|联系方式|住址|姓名).{0,8}(变更|变化|改了|换了)", {"PROCEDURE"}),
+    # 主题改吃公共常量：原来这里和处理器各写一份，两份都不认「换手机号」「地址变了」。
+    (fact_admin.q_info_change, INFO_CHANGE_TOPIC,
+     {"PROCEDURE", "QUALIFY", "DURATION"}),
     # 2026-11-19：主题正则改吃公共常量（与处理器同一份），接住「生病了不能开车」
     # 「残疾了驾照怎么办」等口语；排除词在常量里，不抢申请体检与单项身体判定。
     (fact_admin.q_body_change, BODY_CHANGE_TOPIC, {"PROCEDURE", "QUALIFY"}),
@@ -1308,6 +1313,12 @@ _HANDLERS = [
      r"|重新考|重考|再考|重新申领|重新领证|重新领|能不能|考几科|考哪几科|考几个科目))",
      {"QUALIFY", "PROCEDURE", "DURATION", "VALIDITY", "SUBJECT"}),
     (q_recover, r"(恢复驾驶资格|恢复驾照|恢复驾驶)", {"QUALIFY", "PROCEDURE", "VALIDITY"}),
+    # ── 13.9 别的证件过期 / 丢了（护照、身份证、居住证…）──
+    # 必须在换证和补证之前：这两类问句都带「过期」「丢了」，
+    # 交给 q_renew 会答成驾驶证超期注销，交给 REG:REISSUE 会答成驾驶证遗失补领。
+    # cov 给全：用户问法从「怎么办」到「多久」都有，判据本身已在处理器里收紧。
+    (ext.q_non_license_doc, NON_LICENSE_DOC,
+     {"PROCEDURE", "DURATION", "VALIDITY", "QUALIFY", "VALUE"}),
     # ── 14. 换证 / 有效期 / 核发地 / 延期 ──
     # cov 必须含 PENALTY：问「不换证什么后果」会被识别成罚则诉求，
     # 不含它就卡在调度口，处理器永远进不来（这类"改处理器却没改 cov"已经踩过三次）。

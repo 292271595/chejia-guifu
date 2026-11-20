@@ -21,6 +21,7 @@ from fact_common import (extract_codes, covers, source, result, has, norm, cn2in
                          EXAM_TRANSFER_TOPIC, EXAM_TRANSFER_SCOPE, EXAM_TRANSFER_EXCLUDE,
                          APPLY_MEDICAL_TOPIC, APPLY_MEDICAL_MED, APPLY_MEDICAL_EXCLUDE,
                          RENEW_TOPIC, RENEW_HOW, RENEW_CTX, RENEW_CTX_EXCLUDE, RENEW_OBJ_EXCLUDE,
+                         NON_LICENSE_DOC, RENEW_EXPIRE_WORD,
                          EXAM_LOCAL_APPLY_TOPIC, is_exam_local_apply, ADD_SCORE_TOPIC)
 
 LAW = "《机动车驾驶证申领和使用规定》（公安部令第172号）"
@@ -404,10 +405,40 @@ def _renew_overdue(years: float) -> Dict:
 # ============================================================
 # 三、换证 / 有效期 / 核发地变更
 # ============================================================
+def q_non_license_doc(q: str) -> Optional[Dict]:
+    """别的证件过期或丢了：明说不在本系统范围，并指路到正确部门。
+
+    护照、身份证、港澳台通行证、居住证、签证、保险都带「过期/到期/丢了」，
+    原来会被两处接走：q_renew 的过期三档（答成驾驶证超期注销），
+    REG:REISSUE 的补证分支（答成驾驶证遗失补领）。都是对象错位。
+    这类问句在交管法规库里本来就没有答案，弃答（return None）会掉到检索层，
+    检索层照样只能抓到驾驶证原文——所以必须在这里明说「不是这个证」，把人送走。
+    """
+    if not re.search(NON_LICENSE_DOC, q):
+        return None
+    if not re.search(RENEW_EXPIRE_WORD + r"|丢了|丢失|遗失|不见了|找不到|掉了|没了|补办", q):
+        return None
+    # 句子里同时提到驾驶证，多半是「驾驶证换证要身份证吗」这类，不当成问别的证。
+    if re.search(r"(驾驶证|驾照|驾证)", q):
+        return None
+    return result(
+        "**你问的不是驾驶证，是别的证件——这类不归交通管理部门，也不适用驾驶证那套「超期 1 年注销、考科目一恢复」的规定。**\n\n"
+        "**各类证件过期、丢了找谁办：**\n"
+        "- **护照**：向**公安机关出入境管理部门**申请换发或者补发；\n"
+        "- **身份证**：向**户口所在地或者居住地**公安机关**户政窗口**申请换领、补领，居民身份证已支持异地办理；\n"
+        "- **港澳通行证、往来台湾通行证**：同样找**出入境管理部门**；\n"
+        "- **居住证**：向居住地公安机关或者社区事务受理机构办理签注、换领、补领；\n"
+        "- **交强险、商业险**：找保险公司续保或补办，不属于交管业务，投保信息会同步到交管系统。\n\n"
+        "⚠️ 别套用：只有**驾驶证**到期才分「超期未满 1 年正常换证 / 满 1 年注销、2 年内考科目一恢复 / 超 2 年重新申领」这三档；驾驶证丢了是另一套（向核发地或者核发地以外的车管所申请补发，原证作废）。上面这些证件各有各的规矩。",
+        [], "SCOPE:NOT_LICENSE")
+
+
 def q_renew(q: str) -> Optional[Dict]:
     # 对象守卫先走：临牌/号牌过期不是驾驶证到期换证（见 RENEW_OBJ_EXCLUDE 注释）。
     if re.search(RENEW_OBJ_EXCLUDE, q):
         return None
+
+
     # 2026-11-19：RENEW_TOPIC 含裸「异地」，会把「异地可以考驾照吗」当成异地换证。
     # 初次报考归 APPLY:MATERIAL（便民 2.1 一证通考），这里先让位；已有换证/补证
     # 等词的问句由 is_exam_local_apply 的排除表挡住，不会被误让位。

@@ -2137,6 +2137,122 @@
       ]
     }
 
+,
+    {
+      "term": "行驶证过期了怎么办",
+      "handler": "table_vehicle_license_expire",
+      "added_at": "2026-11-20",
+      "why": "十批收口后的遗留对象错位：实测「行驶证过期了怎么办」命中 RENEW:EXPIRED，答成驾驶证「超期 1 年注销、考科目一恢复」三档。行驶证本身没有有效期，上面写的日期是车辆检验有效期（道交法第十三条）。单列一行先分清两个证，再讲年检逾期和丢失补领。影响面扫描：①「驾驶证过期半年」仍归 RENEW:EXPIRED（answer 有驾证语境，本行 exclude 挡）；②「行驶证丢了怎么补」归 VEHICLE:LICENSE_LOST（本行 exclude 含补办）；③「行驶证检验有效期过了怎么办」归本行（同一件事）。",
+      "positive": [
+        {
+          "q": "行驶证过期了怎么办",
+          "expect": "VEHICLE:LICENSE_EXPIRE"
+        },
+        {
+          "q": "行车证过期了怎么办",
+          "expect": "VEHICLE:LICENSE_EXPIRE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "驾驶证过期半年了怎么办",
+          "expect_not": "VEHICLE:LICENSE_EXPIRE",
+          "why": "驾驶证过期归 RENEW:EXPIRED"
+        }
+      ]
+    },
+    {
+      "term": "行驶证丢了怎么补",
+      "handler": "table_vehicle_license_lost",
+      "added_at": "2026-11-20",
+      "why": "原来与驾驶证补发共用 REG:REISSUE，正文把行驶证写在第 1 节、驾驶证写在第 2 节，整段以驾驶证为主；端到端复核层对行驶证问句容易判答非所问。拆成独立行，答案只讲登记地车管所、1 日内、原证作废。影响面扫描：①「驾驶证丢了怎么补」仍归 REG:REISSUE（本行 exclude 挡驾证语境）；②「机动车号牌丢了怎么补」仍归 REG:REISSUE（本行 topic 只要行驶证）；③「行驶证过期」归 VEHICLE:LICENSE_EXPIRE（本行 topic 要丢失/补领信号）。",
+      "positive": [
+        {
+          "q": "行驶证丢了怎么补",
+          "expect": "VEHICLE:LICENSE_LOST"
+        },
+        {
+          "q": "行驶证遗失了去哪补办",
+          "expect": "VEHICLE:LICENSE_LOST"
+        }
+      ],
+      "negative": [
+        {
+          "q": "驾驶证丢了怎么补",
+          "expect_not": "VEHICLE:LICENSE_LOST",
+          "why": "驾驶证遗失归 REG:REISSUE"
+        }
+      ]
+    },
+    {
+      "term": "护照过期了怎么办",
+      "handler": "q_non_license_doc",
+      "added_at": "2026-11-20",
+      "why": "实测护照/身份证/港澳通行证/居住证/保险过期，全部命中 RENEW:EXPIRED 答成驾驶证超期三档；丢了则被 REG:REISSUE 答成驾驶证补发。都是对象错位，且这类证件在交管法规库里本无答案，弃答会掉检索层照样抓到驾驶证原文——必须明说「不是这个证」并把人送走。影响面扫描：①「驾驶证到期了怎么换」仍归 RENEW:BEFORE_90（q_non_license_doc 见驾证语境让位）；②「行驶证丢了怎么补」仍归 VEHICLE:LICENSE_LOST（行驶证属交管业务，不进 NON_LICENSE_DOC）；③「保险到期了怎么办」归本处理器（指路保险公司）。",
+      "positive": [
+        {
+          "q": "护照过期了怎么办",
+          "expect": "SCOPE:NOT_LICENSE"
+        },
+        {
+          "q": "身份证丢了怎么办",
+          "expect": "SCOPE:NOT_LICENSE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "驾驶证到期了怎么换",
+          "expect_not": "SCOPE:NOT_LICENSE",
+          "why": "驾驶证到期是交管业务，归 RENEW:BEFORE_90"
+        }
+      ]
+    },
+    {
+      "term": "科目二成绩多久出来",
+      "handler": "q_score_release",
+      "added_at": "2026-11-20",
+      "why": "实测科二/科三/科四成绩问句都命中 EXAM:SCORE_RELEASE，但旧正文通篇讲科目一「交卷 45 分钟」，答错科目；「科二考完多久知道过没过」还被 EXAM:TIMES（补考次数）抢走。按原文 172 号令第四十九条「考试后应当当场公布考试成绩」重写：当场公布不分科目，并把「多久」三种意思拆清（当场出分/保留 3 年/不合格 10 日后重约）。判据抽成 fact_common.EXAM_RESULT_WORD 常量，处理器与调度主题共用一份。影响面扫描：①「科目二没过多久能再约」仍归 EXAM:TIMES（诉求是重约）；②「科目二成绩保留多久」仍归 EXAM:SCORE_VALID（诉求是有效期）；③「科目一成绩多久出来」仍归本处理器（正文首段就讲科目一）。",
+      "positive": [
+        {
+          "q": "科目二成绩多久出来",
+          "expect": "EXAM:SCORE_RELEASE"
+        },
+        {
+          "q": "科二考完多久知道过没过",
+          "expect": "EXAM:SCORE_RELEASE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "科目二没过多久能再约",
+          "expect_not": "EXAM:SCORE_RELEASE",
+          "why": "问重约间隔，归 EXAM:TIMES"
+        }
+      ]
+    },
+    {
+      "term": "驾驶证换手机号怎么弄",
+      "handler": "q_info_change",
+      "added_at": "2026-11-20",
+      "why": "实测三个真实说法全漏：「驾驶证换手机号怎么弄」（无「电话」二字、动词后置）、「驾照地址变了怎么办」（动词「变了」不在旧词表）、「换了手机号要告诉车管所吗」（动词在前）。入口判据抽成 fact_common.INFO_CONTACT_WORD/INFO_CHANGE_VERB/INFO_CHANGE_EXCLUDE 常量，处理器与调度主题共用一份（项目「两处各写一份」老坑）。影响面扫描：①「搬家了联系方式要改吗」归 REG:FILING（车辆侧变更备案，加「搬家」让位守卫）；②「驾驶证换证要带什么材料」归 RENEW:BEFORE_90（exclude 挡换证）；③「车辆所有人电话变了要改吗」归 REG:FILING（exclude 挡车辆语境）。",
+      "positive": [
+        {
+          "q": "驾驶证换手机号怎么弄",
+          "expect": "INFO_CHANGE"
+        },
+        {
+          "q": "驾照地址变了怎么办",
+          "expect": "INFO_CHANGE"
+        }
+      ],
+      "negative": [
+        {
+          "q": "搬家了联系方式要改吗",
+          "expect_not": "INFO_CHANGE",
+          "why": "车辆联系方式变更归 REG:FILING"
+        }
+      ]
+    }
 
   ]
 }

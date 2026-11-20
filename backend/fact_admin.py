@@ -19,7 +19,8 @@ import re
 from typing import Dict, Optional
 
 from fact_common import (source, result, LICENSE_TABLE, extract_codes, ABROAD_SELF, ABROAD_EXPIRE,
-                         BODY_CHANGE_TOPIC, BODY_CHANGE_EXCLUDE, REISSUE_TOPIC, REISSUE_EXCLUDE)
+                         BODY_CHANGE_TOPIC, BODY_CHANGE_EXCLUDE, REISSUE_TOPIC, REISSUE_EXCLUDE,
+                         INFO_CONTACT_WORD, INFO_CHANGE_VERB, INFO_CHANGE_EXCLUDE)
 
 LAW = "《机动车驾驶证申领和使用规定》（公安部令第172号）"
 LAW_REG = "《机动车登记规定》（公安部令第164号）"
@@ -253,9 +254,12 @@ def q_review(q: str) -> Optional[Dict]:
 # ============================================================
 # 四、信息变更备案（第八十一条）
 # ============================================================
+# 入口判据在 fact_common（与调度主题共用一份，见 INFO_CHANGE_TOPIC 注释）。
+
 def q_info_change(q: str) -> Optional[Dict]:
-    if not re.search(r"(信息|地址|电话|联系方式|住址|姓名).{0,8}(变更|变化|改了|换了)", q) \
-            and not re.search(r"(变更|改了).{0,8}(信息|地址|电话|联系方式)", q):
+    if not (re.search(INFO_CONTACT_WORD, q) and re.search(INFO_CHANGE_VERB, q)):
+        return None
+    if re.search(INFO_CHANGE_EXCLUDE, q):
         return None
     return result(
         "**需要备案，时限是信息变更后 30 日内。**\n\n"
@@ -821,15 +825,14 @@ def q_vehicle_reg(q: str) -> Optional[Dict]:
     # 补发/掉了」全漏；调度正则又另写一份。判据抽公共常量，调度+处理器共用。
     if re.search(REISSUE_TOPIC, q) and not re.search(REISSUE_EXCLUDE, q):
         return result(
-            "**补领分两种，办理渠道不同：**\n\n"
-            "**1. 机动车号牌、行驶证灭失/丢失/损毁**：向**登记地**车辆管理所申请补领、换领，"
-            "提交机动车所有人身份证明；补领后**原号牌、行驶证作废**，不得继续使用。"
-            "（依据164号令关于牌证补领的规定）\n\n"
-            "**2. 驾驶证遗失**：向**核发地或者核发地以外的**车辆管理所申请补发，"
+            "**驾驶证遗失（补证）**：向**核发地或者核发地以外的**车辆管理所申请补发，"
             "确认申请信息并提交身份证明；符合规定的，车辆管理所应当在 **1 日内**补发（第六十九条）。\n"
             "- 补领驾驶证后，**原驾驶证作废**，不得继续使用；\n"
             "- 驾驶证被**扣押、扣留或者暂扣期间**，**不得申请补发**。\n\n"
-            "⚠️ 现在多数地区可直接在「交管12123」App 在线补领驾驶证/申领电子行驶证。",
+            "**机动车号牌丢了**：向**登记地**车辆管理所申请补领，提交身份证明，"
+            "自受理之日起 **15 日内**补发（第五十一条），**原号牌号码不变**，原号牌作废；"
+            "补发期间可申领有效期不超过 15 日的临时号牌。（行驶证丢失另有补领流程。）\n\n"
+            "⚠️ 现在多数地区可直接在「交管12123」App 在线补领驾驶证。",
             [source(f"{LAW}第六十九条",
                     "机动车驾驶证遗失的，机动车驾驶人应当向机动车驾驶证核发地或者核发地以外的车辆管理所"
                     "申请补发。机动车驾驶人补领机动车驾驶证后，原机动车驾驶证作废，不得继续使用")],
